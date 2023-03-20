@@ -55,13 +55,13 @@ spp_all_long <- assemble_worms('long')
 These have already been scrubbed of confounding symbols and parenthetical genera... with this expanded list, overwrite downfilled thermal tolerance trait values using AquaMaps at the species level where available.
 
 ```{r load expanded vuln scores from script 4}
-match_df <- fread(here_anx('1_downfill_traits', 
+match_df <- fread(here_anx('External Data/1_downfill_traits', 
                            'spp_match_downfill_spp_traits.csv')) %>%
-  full_join(fread(here_anx('1_downfill_traits', 
+  full_join(fread(here_anx('External Data/1_downfill_traits', 
                            'spp_match_downfill_levels.csv'))) %>%
-  full_join(fread(here_anx('1_downfill_traits', 
+  full_join(fread(here_anx('External Data/1_downfill_traits', 
                            'spp_match_downfill_traits.csv'))) %>%
-  full_join(fread(here_anx('1_downfill_traits', 
+  full_join(fread(here_anx('External Data/1_downfill_traits', 
                            'spp_match_downfill_taxa.csv'))) %>%
   select(-starts_with('df_')) 
 # cp <- match_df %>% filter(spp == 'caulophryne polynema')
@@ -335,13 +335,13 @@ gf_spp_traits <- traits_all_gf_clean %>%
   distinct()
   
 write_csv(gf_taxa,       
-          here_anx('2_gapfill_traits/spp_up_down_gapfill_taxa.csv'))
+          here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_taxa.csv'))
 write_csv(gf_traits,     
-          here_anx('2_gapfill_traits/spp_up_down_gapfill_traits.csv'))
+          here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_traits.csv'))
 write_csv(gf_levels,     
-          here_anx('2_gapfill_traits/spp_up_down_gapfill_levels.csv'))
+          here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_levels.csv'))
 write_csv(gf_spp_traits, 
-          here_anx('2_gapfill_traits/spp_up_down_gapfill_spp_traits.csv'))
+          here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_spp_traits.csv'))
 
 ### to reassemble:
 # traits_gf_df <- fread(here_anx('2_gapfill_traits/spp_up_down_gapfill_spp_traits.csv')) %>%

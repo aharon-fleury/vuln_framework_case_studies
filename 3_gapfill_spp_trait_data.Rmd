@@ -74,7 +74,7 @@ Here we will pull in depth ranges from AquaMaps and include where possible. Note
 
 ```{r depth class and zone}
 worms_names <- assemble_worms()
-am_spp_names <- fread(here_anx('../aquamaps_2021/ver10_2019_speciesoccursum_iucn.csv')) %>%
+am_spp_names <- fread(here_anx('External Data', 'aquamaps', 'OHara_4June2021', 'ver10_2019_speciesoccursum_iucn.csv')) %>%
   janitor::clean_names() %>%
   mutate(species = paste(genus, species) %>% tolower()) %>%
   select(am_sid = species_id, species) %>%
@@ -90,7 +90,7 @@ depth_class_df <- data.frame(d = 1:11000) %>%
   mutate(depth = fct_inorder(depth))
 d_lvls <- levels(depth_class_df$depth)
 
-spp_depth_df <- read_csv(here_anx('../aquamaps_2021/species_envelope_summary.csv')) %>%
+spp_depth_df <- read_csv(here_anx('External Data', 'aquamaps', 'OHara_4June2021', 'species_envelope_summary.csv')) %>%
   filter(param == 'log10_depth') %>%
   filter(dist %in% c('max', 'min')) %>%
   mutate(d = round(10^value)) %>%
@@ -124,9 +124,9 @@ spp_zone_df <- spp_depth_df %>%
 
 ```{r length}
 spp_length_df <- read_csv(here('_data/fb_traits/trait_length_cm.csv')) %>%
-  mutate(trait_value = case_when(length < 5     ~ '0.5mm-49mm',
-                                 length < 1000  ~ '50mm-999mm',
-                                 length >= 1000 ~ '>1000mm',
+  mutate(trait_value = case_when((length*10) < 5     ~ '0.5mm-49mm',
+                                 (length*10) < 1000  ~ '50mm-999mm',
+                                 (length*10) >= 1000 ~ '>1000mm',
                                  TRUE      ~ 'unknown')) %>%
   mutate(category = 'biophysical_traits',
          trait = 'adult_body_mass_body_size')
@@ -167,7 +167,7 @@ These were generated in the spp vulnerability mapping project, and saved in that
 * Use largest value across all pops/subpops for same spp name
 
 ```{r eoo range}
-range_df <- read_csv(here('../spp_vuln_mapping/_data/spp_ranges.csv')) %>%
+range_df <- read_csv(here('../spp_vuln_spatial_temporal/_data/spp_ranges.csv')) %>%
   mutate(trait_value = case_when(range_tot_km2 < 100 ~ '<99',
                                  range_tot_km2 < 5000 ~ '100-4999',
                                  range_tot_km2 < 20000 ~ '5000-19999',

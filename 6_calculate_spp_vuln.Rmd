@@ -197,7 +197,7 @@ spp_traits_hab_fixed <- spp_traits %>%
 
 Break down by taxon and process in a loop to reduce computational pressures...
 ``` {r}
-sens_int_file <- here_anx('int/sensitivity_by_spp_traits.csv')
+sens_int_file <- here_anx('External Data/int/sensitivity_by_spp_traits.csv')
 
 # if(!file.exists(sens_int_file)) {
   ### unlink(sens_int_file)
@@ -224,7 +224,7 @@ sens_int_file <- here_anx('int/sensitivity_by_spp_traits.csv')
   }
   taxon_vec <- spp_sens_raw$taxon %>% unique() %>% sort()
   
-  spp_sens_list <- parallel::mclapply(taxon_vec, mc.cores = 6, FUN = summarize_sens_by_taxon)
+  spp_sens_list <- parallel::mclapply(taxon_vec, mc.cores = 1, FUN = summarize_sens_by_taxon)
   
   spp_sens <- rbindlist(spp_sens_list)
   write_csv(spp_sens, sens_int_file)
@@ -269,7 +269,7 @@ p <- ggplot(plot_df, aes(x = stressor, y = sens_norm)) +
   ylim(c(0, 1)) +
   facet_wrap(~ taxon)
 
-ggsave(here('figs/spp_sens_scores.png'), height = 6, width = 6, dpi = 300)
+ggsave(here('figs/BOTH_spp_sens_scores.png'), height = 6, width = 6, dpi = 300)
 
 knitr::include_graphics(here('figs/spp_sens_scores.png'))
 ```
@@ -289,6 +289,8 @@ top_3_sens <- spp_sens %>%
   filter(!stressor %in% c('biomass_removal', 'sst_rise'))
 
 DT::datatable(top_3_sens)
+
+write_csv(top_3_sens, here_anx('External Data/int/BOTH_sensitivity_top3_stressors.csv'))
 ```
 
 ## Score general adaptive capacity
@@ -329,7 +331,7 @@ p <- ggplot(spp_adcap_gen, aes(x = taxon, y = adcap_gen_score)) +
   geom_jitter(size = .25, alpha = .6, width = .2, height = 0) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5))
 
-ggsave(here('figs/spp_adcap_gen_scores.png'), height = 4, width = 4, dpi = 300)
+ggsave(here('figs/BOTH_spp_adcap_gen_scores.png'), height = 4, width = 4, dpi = 300)
 
 knitr::include_graphics(here('figs/spp_adcap_gen_scores.png'))
 ```
@@ -367,7 +369,7 @@ spp_adcap_spec_raw <- spp_traits %>%
 spp_adcap_spec <- spp_adcap_spec_raw %>%
   mutate(wt_adcap_spec = adcap_spec_score * trait_prob) %>%
   group_by(species, stressor, taxon) %>%
-  summarize(adcap_spec_score = sum(adcap_spec_score, na.rm = TRUE), 
+  summarize(adcap_spec_score = sum(wt_adcap_spec, na.rm = TRUE), 
             .groups = 'drop')
 
 adcap_spec_sum <- spp_adcap_spec %>%
@@ -412,7 +414,7 @@ p <- ggplot(plot_df, aes(x = stressor, y = adcap_spec_norm)) +
   ylim(c(0, 1)) +
   facet_wrap( ~ taxon)
 
-ggsave(here('figs/spp_adcap_spec_scores.png'), height = 6, width = 6, dpi = 300)
+ggsave(here('figs/BOTH_spp_adcap_spec_scores.png'), height = 6, width = 6, dpi = 300)
 
 knitr::include_graphics(here('figs/spp_adcap_spec_scores.png'))
 ```
@@ -421,7 +423,7 @@ knitr::include_graphics(here('figs/spp_adcap_spec_scores.png'))
 
 ### Adaptive capacity to top three stressors by taxon
 ```{r}
-top_3_adcap <- spp_adcap_spec %>%
+wt_top_3_adcap <- spp_adcap_spec %>%
   group_by(taxon, stressor) %>%
   summarize(adcap_score = mean(adcap_spec_score), 
             .groups = 'drop') %>%
@@ -430,7 +432,9 @@ top_3_adcap <- spp_adcap_spec %>%
   filter(adcap_score >= nth(adcap_score, 3)) %>%
   ungroup()
 
-DT::datatable(top_3_adcap)
+DT::datatable(wt_top_3_adcap)
+
+write_csv(wt_top_3_adcap, here_anx('External Data/int/BOTH_spec_top3_stressors.csv'))
 ```
 
 ## Assign exposure potential modifier
@@ -501,7 +505,7 @@ null_exposures <- spp_traits %>%
 cleared_exposure <- spp_exposure_wildlife_strike %>%
   filter(override)
 
-write_csv(cleared_exposure, here_anx('int/cleared_exposure.csv'))
+write_csv(cleared_exposure, here_anx('External Data/int/BOTH_BOTH_cleared_exposure.csv'))
 ```
 
 ### These species are not listed as potential exposure to these stressors: 
@@ -575,7 +579,7 @@ spp_scores_mean <- spp_sens %>%
   left_join(spp_adcap_spec, by = c('taxon', 'species', 'stressor')) %>%
   drop_na()
 
-write_csv(spp_scores_mean, here_anx('int/spp_scores_mean.csv'))
+write_csv(spp_scores_mean, here_anx('External Data/int/BOTH_spp_scores_mean.csv'))
 
 ref_values <- spp_scores_mean %>%
   group_by(stressor) %>%
@@ -637,15 +641,15 @@ spp_vuln_rescale_score <- spp_vuln_rescale %>%
 Save the vulnerability scores for Github, broken into subtables for file size.  This is the info most useful for the typical user.
 
 ``` {r write just vulnerability scores}
-write_csv(spp_vuln_rescale_taxa,  here('_output/spp_vuln_from_traits_tx.csv'))
-write_csv(str_lookup,             here('_output/spp_vuln_from_traits_str.csv'))
-write_csv(spp_vuln_rescale_score, here('_output/spp_vuln_from_traits_score.csv'))
+write_csv(spp_vuln_rescale_taxa,  here('_output/BOTH_spp_vuln_from_traits_tx.csv'))
+write_csv(str_lookup,             here('_output/BOTH_spp_vuln_from_traits_str.csv'))
+write_csv(spp_vuln_rescale_score, here('_output/BOTH_spp_vuln_from_traits_score.csv'))
 
 ### to reassemble just vuln scores:
-# spp_vuln_scores <- fread(here('_output/spp_vuln_from_traits_score.csv')) %>%
-#   left_join(fread(here('_output/spp_vuln_from_traits_str.csv'))) %>%
-#   left_join(fread(here('_output/spp_vuln_from_traits_tx.csv'))) %>%
-#   select(-vuln_tx_id, -vuln_str_id)
+spp_vuln_scores <- fread(here('_output/BOTH_spp_vuln_from_traits_score.csv')) %>%
+  left_join(fread(here('_output/BOTH_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here('_output/BOTH_spp_vuln_from_traits_tx.csv'))) %>%
+  select(-vuln_tx_id, -vuln_str_id)
 
 ```
 
@@ -660,16 +664,16 @@ spp_vuln_resc_all_scores <- spp_vuln_rescale %>%
          exposure_mod, vuln)
   
 write_csv(spp_vuln_rescale_taxa, 
-          here_anx('3_vuln_score_traits/spp_vuln_from_traits_tx.csv'))
+          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_tx.csv'))
 write_csv(str_lookup, 
-          here_anx('3_vuln_score_traits/spp_vuln_from_traits_str.csv'))
+          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_str.csv'))
 write_csv(spp_vuln_resc_all_scores, 
-          here_anx('3_vuln_score_traits/spp_vuln_from_traits_all_scores.csv'))
+          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_all_scores.csv'))
 
 ### to reassemble all scores incl components:
-spp_vuln_scores_all <- fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_all_scores.csv')) %>%
-  left_join(fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_str.csv'))) %>%
-  left_join(fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_tx.csv'))) %>%
+spp_vuln_scores_all <- fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_all_scores.csv')) %>%
+  left_join(fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_tx.csv'))) %>%
   select(-vuln_tx_id, -vuln_str_id)
 # cp <- spp_vuln_scores_all %>% filter(species == 'caulophryne polynema')
 # cs <- spp_vuln_scores_all %>% filter(species == 'centrophryne spinulosa')
@@ -723,7 +727,7 @@ for(t in taxa) { # t <- taxa[6]
           strip.background = element_rect(fill = 'grey90')) +
     labs(title = paste0('Vulnerability: ', t))
   
-  plotfile <- sprintf('figs/vuln_plot_from_traits_%s.png', t)
+  plotfile <- sprintf('figs/BOTH_vuln_plot_from_traits_%s.png', t)
   ggsave(plot = vuln_plot, filename = plotfile, 
          width = 8, height = 8, dpi = 300)
   # cat(sprintf('![](%s)\n', plotfile))
@@ -749,6 +753,8 @@ x <- ggplot(plot_df, aes(x = stressor, y = vuln, color = taxon)) +
              alpha = 1, color = 'yellow', fill = 'black') +
   ylim(0, 1)
 x
+
+ggsave(here('figs/BOTH_vuln_by_stress_all_taxa.png'), height = 6, width = 6, dpi = 300)
 ```
 
 
@@ -758,7 +764,7 @@ x
 
 stressors <- plot_df$stressor %>% unique()
                 
-for(s in stressors) { # s <- stressors[6]
+for(s in stressors) {  
   s_vuln <- plot_df %>%
     filter(stressor == s)
   mean_str_vuln <- s_vuln %>%
@@ -781,7 +787,7 @@ for(s in stressors) { # s <- stressors[6]
           strip.background = element_rect(fill = 'grey90')) +
     labs(title = paste0('Vulnerability: ', s))
   
-  plotfile <- sprintf('figs/vuln_plot_by_stressor_%s.png', s)
+  plotfile <- sprintf('figs/BOTH_vuln_plot_by_stressor_%s.png', s)
   ggsave(plot = vuln_plot, filename = plotfile, 
          width = 8, height = 8, dpi = 300)
   # cat(sprintf('![](%s)\n', plotfile))
@@ -807,4 +813,6 @@ x <- ggplot(plot_df, aes(x = taxon, y = vuln, color = stressor)) +
   ylim(0, 1)
 
 x
+
+ggsave(here('figs/BOTH_vuln_taxa_all_stressors.png'), height = 6, width = 6, dpi = 300)
 ```

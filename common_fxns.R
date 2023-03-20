@@ -2,18 +2,18 @@ here_anx <- function(f = '', ...) {
   ### create file path to git-annex dir for project
   f <- paste(f, ..., sep = '/')
   f <- stringr::str_replace_all(f, '\\/+', '/')
-  f_anx <- sprintf('/home/shares/ohi/spp_vuln/spp_vuln_framework/%s', f)
+  f_anx <- sprintf('C:/Users/uqafleu1/OneDrive - The University of Queensland/Documents/GitHub/%s', f)
   return(f_anx)
 }
 
 get_spp_traits <- function() {
   ### this grabs all the traits by species, after downfilling and agapfilling
-  traits_gf_df <- data.table::fread(here_anx('2_gapfill_traits/spp_up_down_gapfill_spp_traits.csv')) %>%
-    oharac::dt_join(data.table::fread(here_anx('2_gapfill_traits/spp_up_down_gapfill_levels.csv')),
+  traits_gf_df <- data.table::fread(here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_spp_traits.csv')) %>%
+    oharac::dt_join(data.table::fread(here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_levels.csv')),
                     by = 'gf_match_id', type = 'full') %>%
-    oharac::dt_join(data.table::fread(here_anx('2_gapfill_traits/spp_up_down_gapfill_traits.csv')),
+    oharac::dt_join(data.table::fread(here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_traits.csv')),
                     by = 'gf_trait_id', type = 'full') %>%
-    oharac::dt_join(data.table::fread(here_anx('2_gapfill_traits/spp_up_down_gapfill_taxa.csv')),
+    oharac::dt_join(data.table::fread(here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_taxa.csv')),
                     by = 'gf_spp_id', type = 'full') %>%
     select(-starts_with('gf_'))
   return(traits_gf_df)
@@ -21,9 +21,9 @@ get_spp_traits <- function() {
 
 get_spp_vuln <- function() {
   ## to reassemble all scores incl components:
-  spp_vuln_scores_all <- data.table::fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_all_scores.csv')) %>%
-    left_join(data.table::fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_str.csv'))) %>%
-    left_join(data.table::fread(here_anx('3_vuln_score_traits/spp_vuln_from_traits_tx.csv'))) %>%
+  spp_vuln_scores_all <- data.table::fread(here_anx('External Data/3_vuln_score_traits/spp_vuln_from_traits_all_scores.csv')) %>%
+    left_join(data.table::fread(here_anx('External Data/3_vuln_score_traits/spp_vuln_from_traits_str.csv'))) %>%
+    left_join(data.table::fread(here_anx('External Data/3_vuln_score_traits/spp_vuln_from_traits_tx.csv'))) %>%
     select(-vuln_tx_id, -vuln_str_id)
   return(spp_vuln_scores_all)
 }

@@ -198,13 +198,13 @@ match_spp_traits <- matched_df %>%
   distinct()
   
 write_csv(match_taxa,       
-          here_anx('1_downfill_traits/spp_match_downfill_taxa.csv'))
+          here_anx('External Data/1_downfill_traits/spp_match_downfill_taxa.csv'))
 write_csv(match_traits,     
-          here_anx('1_downfill_traits/spp_match_downfill_traits.csv'))
+          here_anx('External Data/1_downfill_traits/spp_match_downfill_traits.csv'))
 write_csv(match_levels,     
-          here_anx('1_downfill_traits/spp_match_downfill_levels.csv'))
+          here_anx('External Data/1_downfill_traits/spp_match_downfill_levels.csv'))
 write_csv(match_spp_traits, 
-          here_anx('1_downfill_traits/spp_match_downfill_spp_traits.csv'))
+          here_anx('External Data/1_downfill_traits/spp_match_downfill_spp_traits.csv'))
 
 ### to reassemble:
 # match_df <- fread(here_anx('1_downfill_traits/spp_match_downfill_spp_traits.csv')) %>%
