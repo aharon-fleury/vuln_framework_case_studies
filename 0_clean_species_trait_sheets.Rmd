@@ -166,6 +166,18 @@ hdr_check <- lapply(sheetnames, FUN = function(s) check_headers(raw_file, s)) %>
 extras <- hdr_check$sheet %>% unique()
 ```
 
+```{r}
+raw_file_turtle <- here('_raw_data/xlsx/chelonia_mydas_updated_traits.xlsx')
+
+sheetnames_turtle <- readxl::excel_sheets(raw_file_turtle)
+
+hdr_check_turtle <- lapply(sheetnames_turtle, FUN = function(s) check_headers(raw_file_turtle, s)) %>%
+  bind_rows() %>%
+  filter(!is.na(val))
+
+extras_turtle <- hdr_check_turtle$sheet %>% unique()
+
+```
 
 ``` {r}
 process_sheet <- function(f, s) {
@@ -216,6 +228,7 @@ raw_data_df <- lapply(sheetnames,
 
 x <- raw_data_df %>%
   select(trait_value) %>% distinct()
+
 ```
 
 ### New fish traits data
@@ -267,6 +280,27 @@ new_spp <- names(fish_mike_raw)[-c(1:6)] %>% tolower()
 
 ```
 
+### Bring in updated chelonia mydas traits for case study and merge original file with chelonia mydas traits and filter to only chelonia mydas.
+```{r}
+raw_data_df_turtle <- lapply(sheetnames_turtle,
+                            FUN = function(s) {
+                              process_sheet(raw_file_turtle,s)
+                            }) %>% 
+  bind_rows() %>%
+  ### fix typos and minor fixes:
+  mutate(trait_value = str_replace_all(trait_value, 'unkown', 'unknown'),
+         trait_value = str_replace_all(trait_value, 'demerssal', 'demersal'),
+         trait_value = str_replace_all(trait_value, 'esturary', 'estuary'),
+         trait_value = str_replace_all(trait_value, 'interntidal', 'intertidal'),
+         trait_value = str_replace_all(trait_value, 'lentgh', 'length'),
+         trait_value = str_replace_all(trait_value, 'neary sessile', 'nearly sessile'),
+         trait_value = str_replace_all(trait_value, 'this sp,', 'this sp.'),
+         trait = str_replace_all(trait, '\\(pld\\)$', '(pld) exposure'))
+
+raw_data_df <- bind_rows(raw_data_df, raw_data_df_turtle) %>%
+  filter(grepl("chelonia mydas", spp_gp))
+
+```
 ## clean up troublesome traits
 
 Check raw data against valid category values.
@@ -306,19 +340,32 @@ spp_data_zones <- raw_data_df %>%
 ### adult mobility
 
 ``` {r clean up mobility traits}
-mob_vals <- traitvals_df_valid %>%
-  filter(trait == 'adult mobility') %>%
-  .$trait_value %>% paste0(collapse = '|')
-# "sessile|nearly sessile/sedentary|passive|vertical migrator|mobile resident|horizontal migrator|nomadic"
-  
 spp_data_mobility <- raw_data_df %>%
   filter(trait == 'adult mobility') %>%
   mutate(tmp = str_replace_all(tolower(trait_value), '[^a-z ]+', ';')) %>%
   ### split and unnest, trim and clean:
   mutate(tmp = str_split(tmp, ';')) %>%
-  unnest(tmp) %>%
-  ### clean up some inconsistencies
-  mutate(tmp = str_replace_all(tmp, 'horiz[a-z]+', 'horizontal'),
+  unnest(tmp)
+
+#Checking distinct count for each group in mobility
+mobility_distinct_check<-spp_data_mobility %>%
+  group_by(tmp) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  arrange(desc(count))
+
+DT::datatable(mobility_distinct_check)
+```
+
+``` {r Continuing clean-up for mobility traits}
+mob_vals <- traitvals_df_valid %>%
+  filter(trait == 'adult mobility') %>%
+  .$trait_value %>% paste0(collapse = '|')
+# "sessile|nearly sessile/sedentary|passive|vertical migrator|mobile resident|horizontal migrator|nomadic"
+  
+### clean up some inconsistencies
+spp_data_mobility <- spp_data_mobility %>%
+  mutate(tmp = str_replace_all(tmp, 'hor[a-z]+', 'horizontal'),
          tmp = str_replace_all(tmp, 'vertic[a-z]+', 'vertical'),
          tmp = str_replace_all(tmp, 'migrat[a-z]+', 'migrator'),
          tmp = str_replace_all(tmp, 'residen[a-z]+', 'resident'),
@@ -332,6 +379,17 @@ spp_data_mobility <- raw_data_df %>%
   clean_up_mess()
 
 spp_data_mobility$trait_val_clean %>% table()
+```
+
+
+``` {r Re-check mobility counts}
+mobility_distinct_cleancheck<-spp_data_mobility %>%
+  group_by(trait_val_clean) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  arrange(desc(count))
+
+DT::datatable(mobility_distinct_cleancheck)
 ```
 
 ### depth (min/max)
@@ -371,20 +429,20 @@ depth_df <- data.frame(d = 0:20000) %>%
   mutate(zone = fct_inorder(zone))
 zone_fct <- levels(depth_df$zone)
 
-spp_data_depth_num <- raw_data_df %>%
-  filter(trait == 'depth (min/max)') %>%
-  filter(str_detect(trait_value, '[0-9]')) %>%
-  rowwise() %>%
-  mutate(nums = str_extract_all(trait_value, '[0-9]+'),
-         min_d = min(as.numeric(unlist(nums))), 
-         max_d = max(as.numeric(unlist(nums)))) %>%
-  left_join(depth_df %>% rename(min_z = zone), by = c('min_d' = 'd')) %>%
-  left_join(depth_df %>% rename(max_z = zone), by = c('max_d' = 'd')) %>%
-  mutate(zones = paste0(zone_fct[as.integer(min_z):as.integer(max_z)], collapse = ';'),
-         zones = str_split(zones, ';')) %>%
-  unnest(zones) %>%
-  select(category, trait, trait_value, trait_val_clean = zones, spp_gp, sheet) %>%
-  distinct()
+# spp_data_depth_num <- raw_data_df %>%
+#   filter(trait == 'depth (min/max)') %>%
+#   filter(str_detect(trait_value, '[0-9]')) %>%
+#   rowwise() %>%
+#   mutate(nums = str_extract_all(trait_value, '[0-9]+'),
+#          min_d = min(as.numeric(unlist(nums))),
+#          max_d = max(as.numeric(unlist(nums)))) %>%
+#   left_join(depth_df %>% rename(min_z = zone), by = c('min_d' = 'd')) %>%
+#   left_join(depth_df %>% rename(max_z = zone), by = c('max_d' = 'd')) %>%
+#   mutate(zones = paste0(zone_fct[as.integer(min_z):as.integer(max_z)], collapse = ';'),
+#          zones = str_split(zones, ';')) %>%
+#   unnest(zones) %>%
+#   select(category, trait, trait_value, trait_val_clean = zones, spp_gp, sheet) %>%
+#   distinct()
   
 
 
@@ -421,7 +479,7 @@ spp_data_atm <- spp_atm %>%
          trait_val_clean = 'air')
 
 spp_data_depth <- spp_data_depth_text %>%
-  bind_rows(spp_data_depth_num) %>%
+  #bind_rows(spp_data_depth_num) %>%
   bind_rows(spp_data_atm) %>%
   distinct()
 
@@ -892,6 +950,16 @@ spp_data_reprod_strategy <- raw_data_df %>%
 
 spp_data_reprod_strategy$trait_val_clean %>% table()
 
+```
+
+``` {r Re-check mobility counts}
+reprod_strat_cleancheck<- spp_data_reprod_strategy %>%
+  group_by(trait_value) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  arrange(desc(count))
+
+DT::datatable(reprod_strat_cleancheck)
 ```
 
 ### age to first reproduction/generation time

@@ -94,13 +94,14 @@ repr_spp <- spp_gp_traits %>%
                                 repres == 'family' ~ family,
                                 repres == 'order'  ~ order,
                                 repres == 'class'  ~ class,
-                                TRUE ~ NA_character_))
+                                TRUE ~ NA_character_)) 
 
 non_mut_excl <- c('adult_mobility', 'biomineral', 'zone',
                   'calcium_carbonate_structure_location', 
                   'depth_min_max', 'respiration_structures', 
                   'across_stage_dependent_habitats_condition', 
-                  'within_stage_dependent_habitats_condition')
+                  'within_stage_dependent_habitats_condition',
+                  'sub_population_dependence_on_particular_sites')
 
 ### group by the new spp gp and summarize traits
 repr_spp_gps <- repr_spp %>%
@@ -139,7 +140,8 @@ matched_df <- spp_all_long %>%
   filter(!is.na(trait_value)) %>%
   group_by(spp, trait) %>%
   filter(as.numeric(rank) == max(as.numeric(rank))) %>%
-  ungroup()
+  ungroup() %>%
+  arrange(gap, stage, category, trait)
 ### matched_df$rank %>% unique()
 ### [1] class   order   family  genus   species
 ### Levels: kingdom phylum class order family genus species
@@ -172,10 +174,10 @@ knitr::kable(check_spp)
 Break into several chunks to reduce duplication of info and resulting file size...
 
 ```{r write out results}
-match_taxa <- matched_df %>%
-  select(taxon, spp) %>%
+match_stage <- matched_df %>%
+  select(stage, gap, spp) %>%
   distinct() %>%
-  arrange(taxon, spp) %>%
+  arrange(gap, stage) %>%
   mutate(df_spp_id = 1:n())
 
 match_traits <- matched_df %>%
@@ -191,13 +193,13 @@ match_levels <- matched_df %>%
   mutate(df_match_id = 1:n())
 
 match_spp_traits <- matched_df %>%
-  left_join(match_taxa, by = c('taxon', 'spp')) %>%
+  left_join(match_stage, by = c('gap', 'stage')) %>%
   left_join(match_traits, by = c('category', 'trait', 'trait_value')) %>%
   left_join(match_levels, by = c('match', 'name' = 'match_name')) %>%
   select(df_spp_id, df_trait_id, df_match_id, trait_prob) %>%
   distinct()
   
-write_csv(match_taxa,       
+write_csv(match_stage,       
           here_anx('External Data/1_downfill_traits/spp_match_downfill_taxa.csv'))
 write_csv(match_traits,     
           here_anx('External Data/1_downfill_traits/spp_match_downfill_traits.csv'))

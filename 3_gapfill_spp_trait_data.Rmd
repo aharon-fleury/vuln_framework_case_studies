@@ -222,6 +222,8 @@ new_traits_df <- bind_rows(range_df,
                            TRUE ~ 'new group')) %>%
   filter(taxon != 'new group') %>%
   select(taxon, spp_gp, category, trait, trait_value) %>%
+  ### filtered to only chelonia mydas
+  filter(spp_gp == 'chelonia mydas') %>% 
   distinct()
   
 
@@ -242,11 +244,22 @@ Read in spp_traits_valid, and assemble a dataframe of all valid WoRMS species.  
 ``` {r attach filled traits to existing traits}
 spp_traits_valid <- read_csv(here('_data/spp_traits_valid.csv'))
 
+spp_gps_valid_df <- spp_traits_valid %>%
+  select(spp_gp, stage, gap) %>%
+  filter(gap == 'yes') %>% 
+  distinct()
+  
+  ###adding stage to new_traits_df for only those traits that will be gap-filled. Adult body mass left out given the usage of life stages. However, adult body mass retained for original calculation's sake though will be removed when merging dfs b/c of distinct()
+new_traits_df <- new_traits_df %>%
+  inner_join(spp_gps_valid_df, by = 'spp_gp') %>%
+  filter(!(trait == 'adult_body_mass_body_size' & !stage == 'original'))
+
 non_mut_excl <- c('adult_mobility', 'biomineral', 
                   'calcium_carbonate_structure_location', 
                   'depth_min_max', 'respiration_structures', 
                   'across_stage_dependent_habitats_condition', 
-                  'within_stage_dependent_habitats_condition', 'zone')
+                  'within_stage_dependent_habitats_condition',
+                  'sub_population_dependence_on_particular_sites', 'zone')
 
 spp_traits_filled <- spp_traits_valid %>%
   select(-n_spp_gps, -trait_prob) %>%
@@ -255,12 +268,13 @@ spp_traits_filled <- spp_traits_valid %>%
   filter(trait_value != 'unknown') %>%
   group_by(taxon) %>%
   mutate(n_spp_gps = n_distinct(spp_gp)) %>%
-  group_by(trait, spp_gp) %>%
+  group_by(trait, spp_gp, stage, gap) %>%
   mutate(trait_prob = ifelse(trait %in% non_mut_excl, 1, 1/n_distinct(trait_value))) %>%
   ungroup() %>%
+  arrange(gap, stage, category, trait)
   ### air sharks should not exist...
   ### intertidal molluscs and flying fish are listed in 'air' as well, OK...
-  filter(!(trait == 'depth_min_max' & trait_value == 'air' & taxon == 'elasmobranchs'))
+  #filter(!(trait == 'depth_min_max' & trait_value == 'air' & taxon == 'elasmobranchs'))
 
 write_csv(spp_traits_filled, here('_data/spp_traits_filled.csv'))
 

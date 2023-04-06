@@ -184,11 +184,11 @@ Fix the habitats - if any dependent habitats, set prob to sum of prob across all
 ``` {r fix habitat traits}
 spp_traits_hab_fixed <- spp_traits %>%
   filter(str_detect(trait, 'dependent_habitat')) %>%
-  group_by(taxon, species, category, trait) %>%
+  group_by(gap, stage, category, trait) %>%
   summarize(dep_habs = paste(trait_value, collapse = ';'),
             trait_value = 'habitat list',
-            trait_prob = sum(trait_prob), 
-            .groups = 'drop') %>%
+            trait_prob = sum(trait_prob)) %>%  
+            # .groups = 'drop') %>%
   mutate(trait_prob = trait_prob / max(trait_prob)) %>%
   bind_rows(spp_traits %>% filter(!str_detect(trait, 'dependent_habitat')))
 ```
@@ -204,36 +204,37 @@ sens_int_file <- here_anx('External Data/int/sensitivity_by_spp_traits.csv')
 
   spp_sens_raw <- str_sens_trait_scores %>%
     left_join(spp_traits_hab_fixed, by = c('category', 'trait', 'trait_value')) %>%
-    filter(!is.na(stressor) & !is.na(taxon))
+    filter(!is.na(stressor))
   
-  message('Summarizing sensitivity trait scores by spp/stressor/trait...')
-  summarize_sens_by_taxon <- function(t) {
+  #message('Summarizing sensitivity trait scores by spp/stressor/trait...')
+  summarize_sens_by_gap_stage <- function(t) {
     ### spp <- spp_vec[1]
-    t_df <- spp_sens_raw %>%
-      filter(taxon == t) 
-    message('Processing ', t_df$species %>% n_distinct(), ' species in taxon ', t, ', sum by trait...')
-    int_df <- t_df %>%
-      group_by(species, stressor, taxon, trait) %>%
+    g_t_df <- spp_sens_raw %>%
+      filter(stage == t) 
+    #message('Processing ', t_df$species %>% n_distinct(), ' species in taxon ', t, ', sum by trait...')
+    int_df <- g_t_df %>%
+      group_by(gap, stage, stressor, trait) %>%
       summarize(sens_score = sum(sens_score * trait_prob, na.rm = TRUE))
-    message('... and now summarizing sensitivity for ', t_df$species %>% n_distinct(), 
-            ' species in taxon ', t, '...')
+    # message('... and now summarizing sensitivity for ', t_df$species %>% n_distinct(),
+    # ' species in taxon ', t, '...')
     out_df <- int_df %>%
-      group_by(species, stressor, taxon) %>%
+      group_by(gap, stage, stressor) %>%
       summarize(sens_score = sum(sens_score, na.rm = TRUE), .groups = 'drop')
     return(out_df)
   }
-  taxon_vec <- spp_sens_raw$taxon %>% unique() %>% sort()
+  stage_vec <- spp_sens_raw$stage %>% unique() %>% sort()
   
-  spp_sens_list <- parallel::mclapply(taxon_vec, mc.cores = 1, FUN = summarize_sens_by_taxon)
+  spp_sens_list <- parallel::mclapply(stage_vec, mc.cores = 1, FUN = summarize_sens_by_gap_stage)
   
-  spp_sens <- rbindlist(spp_sens_list)
+  spp_sens <- rbindlist(spp_sens_list) %>% 
+    arrange(gap, stage)
   write_csv(spp_sens, sens_int_file)
   
 # }
   
 spp_sens <- read_csv(sens_int_file)
 
-```
+ ```
 
 ### Check matching
 
@@ -264,14 +265,14 @@ plot_df <- spp_sens %>%
          sens_norm = ifelse(is.nan(sens_norm), 0, sens_norm))
 
 p <- ggplot(plot_df, aes(x = stressor, y = sens_norm)) +
-  geom_jitter(size = .25, alpha = .6, height = 0) +
+  geom_point(aes(colour = gap), size = .25, alpha = .6, height = 0) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 6)) +
   ylim(c(0, 1)) +
-  facet_wrap(~ taxon)
+  facet_wrap(~ stage)
 
-ggsave(here('figs/BOTH_spp_sens_scores.png'), height = 6, width = 6, dpi = 300)
+ggsave(here('figs/gap_stage_sens_scores.png'), height = 6, width = 6, dpi = 300)
 
-knitr::include_graphics(here('figs/spp_sens_scores.png'))
+knitr::include_graphics(here('figs/gap_stage_sens_scores.png'))
 ```
 
 ### Sensitivity to top three stressors by taxon
@@ -281,16 +282,16 @@ Here sensitivity for each stressor is normalized by max observed for that stress
 top_3_sens <- spp_sens %>%
   group_by(stressor) %>%
   mutate(sens_norm = sens_score / max(sens_score)) %>%
-  group_by(taxon, stressor) %>%
+  group_by(gap, stage, stressor) %>%
   summarize(sens_norm = mean(sens_norm) %>% round(3)) %>%
   arrange(desc(sens_norm)) %>%
-  group_by(taxon) %>%
+  group_by(gap, stage) %>%
   filter(sens_norm >= nth(sens_norm, 3)) %>%
   filter(!stressor %in% c('biomass_removal', 'sst_rise'))
 
 DT::datatable(top_3_sens)
 
-write_csv(top_3_sens, here_anx('External Data/int/BOTH_sensitivity_top3_stressors.csv'))
+write_csv(top_3_sens, here_anx('External Data/int/gap_stage_sensitivity_top3_stressors.csv'))
 ```
 
 ## Score general adaptive capacity
@@ -316,7 +317,7 @@ spp_adcap_gen_raw <- spp_traits %>%
 
 spp_adcap_gen <- spp_adcap_gen_raw %>%
   mutate(wt_adcap_gen = trait_prob * adcap_gen_score) %>%
-  group_by(species, taxon) %>%
+  group_by(gap, stage) %>%
   summarize(adcap_gen_score = sum(wt_adcap_gen, na.rm = TRUE), 
             .groups = 'drop')
 
@@ -327,13 +328,13 @@ spp_adcap_gen <- spp_adcap_gen_raw %>%
 Here scores are not normalized. The pattern would be identical if normalized, simply rescaled.
 
 ```{r plot gen adcap by taxon}
-p <- ggplot(spp_adcap_gen, aes(x = taxon, y = adcap_gen_score)) +
-  geom_jitter(size = .25, alpha = .6, width = .2, height = 0) +
+p <- ggplot(spp_adcap_gen, aes(x = stage, y = adcap_gen_score)) +
+  geom_jitter(aes(colour = gap),size = .25, alpha = .6, width = .2, height = 0) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5))
 
-ggsave(here('figs/BOTH_spp_adcap_gen_scores.png'), height = 4, width = 4, dpi = 300)
+ggsave(here('figs/gap_stage_spp_adcap_gen_scores.png'), height = 4, width = 4, dpi = 300)
 
-knitr::include_graphics(here('figs/spp_adcap_gen_scores.png'))
+knitr::include_graphics(here('figs/gap_stage_spp_adcap_gen_scores.png'))
 ```
 
 * Median: `r median(spp_adcap_gen$adcap_gen_score)`
@@ -363,12 +364,12 @@ adcap_spec_traits <- adcap_spec_traits_raw %>%
 spp_adcap_spec_raw <- spp_traits %>%
   inner_join(adcap_spec_traits, by = c('category', 'trait', 'trait_value')) %>%
   mutate(adcap_spec_score = ifelse(is.na(adcap_score), 0, adcap_score)) %>%
-  filter(!is.na(stressor)) %>%
-  select(-adcap_score, -adcap_score_orig)
+  filter(!is.na(stressor)) #%>%
+  #select(-adcap_score, -adcap_score_orig)
 
 spp_adcap_spec <- spp_adcap_spec_raw %>%
   mutate(wt_adcap_spec = adcap_spec_score * trait_prob) %>%
-  group_by(species, stressor, taxon) %>%
+  group_by(gap, stage, stressor) %>%
   summarize(adcap_spec_score = sum(wt_adcap_spec, na.rm = TRUE), 
             .groups = 'drop')
 
@@ -409,14 +410,14 @@ plot_df <- spp_adcap_spec %>%
   mutate(adcap_spec_norm = adcap_spec_score / max(adcap_spec_score),
          adcap_spec_norm = ifelse(is.nan(adcap_spec_norm), 0, adcap_spec_norm))
 p <- ggplot(plot_df, aes(x = stressor, y = adcap_spec_norm)) +
-  geom_jitter(size = .25, alpha = .6, width = .2, height = 0) +
+  geom_jitter(aes(colour = gap), size = .25, alpha = .6, width = .2, height = 0) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 6)) +
   ylim(c(0, 1)) +
-  facet_wrap( ~ taxon)
+  facet_wrap( ~ stage)
 
-ggsave(here('figs/BOTH_spp_adcap_spec_scores.png'), height = 6, width = 6, dpi = 300)
+ggsave(here('figs/gap_stage_spp_adcap_spec_scores.png'), height = 6, width = 6, dpi = 300)
 
-knitr::include_graphics(here('figs/spp_adcap_spec_scores.png'))
+knitr::include_graphics(here('figs/gap_stage_spp_adcap_spec_scores.png'))
 ```
 
 `r knitr::kable(adcap_spec_sum)`
@@ -424,17 +425,17 @@ knitr::include_graphics(here('figs/spp_adcap_spec_scores.png'))
 ### Adaptive capacity to top three stressors by taxon
 ```{r}
 wt_top_3_adcap <- spp_adcap_spec %>%
-  group_by(taxon, stressor) %>%
+  group_by(gap, stage, stressor) %>%
   summarize(adcap_score = mean(adcap_spec_score), 
             .groups = 'drop') %>%
   arrange(desc(adcap_score)) %>%
-  group_by(taxon) %>%
+  group_by(gap, stage) %>%
   filter(adcap_score >= nth(adcap_score, 3)) %>%
   ungroup()
 
 DT::datatable(wt_top_3_adcap)
 
-write_csv(wt_top_3_adcap, here_anx('External Data/int/BOTH_spec_top3_stressors.csv'))
+write_csv(wt_top_3_adcap, here_anx('External Data/int/gap_stage_spec_top3_stressors.csv'))
 ```
 
 ## Assign exposure potential modifier
@@ -458,54 +459,56 @@ exp_traits <- exp_traits_raw %>%
 spp_exposure_raw <- spp_traits %>%
   inner_join(exp_traits, by = c('category', 'trait', 'trait_value')) %>%
   filter(stressor != 'wildlife_strike') %>%
-  group_by(species, stressor, taxon) %>%
+  group_by(gap, stage, stressor) %>%
   summarize(exposure_mod = as.integer(sum(exp_score, na.rm = TRUE) > 0), 
             .groups = 'drop') %>%
-  arrange(stressor, taxon)
+  arrange(gap, stage, stressor)
   
 air_sea <- spp_traits %>%
   filter(trait == 'air_sea_interface' & trait_value != 'no') %>%
   .$species %>% unique()
+
 spp_exposure_wildlife_strike <- spp_traits %>%
   inner_join(exp_traits, by = c('category', 'trait', 'trait_value')) %>%
   filter(stressor == 'wildlife_strike') %>%
-  group_by(species, taxon) %>%
+  group_by(gap, stage, stressor) %>%
   summarize(exposure_mod = as.integer(sum(exp_score, na.rm = TRUE) > 0),
             zone = paste(trait_value, collapse = ';'),
             .groups = 'drop') %>%
   mutate(btm_only = str_detect(zone, 'benthic|demersal') & 
-                    !str_detect(zone, 'oceanic|air') &
-                    !species %in% air_sea,
+                    !str_detect(zone, 'oceanic|air'),
+         # &
+         #            !species %in% air_sea,
          intertidal_only = str_detect(zone, 'intertidal') & !str_detect(zone, 'neritic|oceanic'),
-         taxon_excl = taxon %in% c('crustacea_arthropods', 'molluscs'),
+         taxon_excl = stage %in% c('crustacea_arthropods', 'molluscs'),
          clear = btm_only|intertidal_only|taxon_excl) %>%
   mutate(override = exposure_mod > 0 & clear,
          exposure_mod = ifelse(clear, 0, exposure_mod),
          stressor = 'wildlife_strike')
 
 spp_exposure <- spp_exposure_wildlife_strike %>%
-  select(species, taxon, exposure_mod, stressor) %>%
+  select(gap, stage, exposure_mod, stressor) %>%
   bind_rows(spp_exposure_raw)
 
 non_exposures <- spp_exposure %>% 
-  group_by(taxon, stressor) %>% 
-  mutate(n_gps = n_distinct(species)) %>%
+  group_by(gap, stage, stressor) %>% 
+  mutate(n_gps = n_distinct(stage)) %>%
   filter(exposure_mod == 0) %>% 
-  summarize(n_gps_no_exp = n_distinct(species),
+  summarize(n_gps_no_exp = n_distinct(stage),
             n_gps = first(n_gps),
             pct_no_exp = round(n_gps_no_exp / n_gps, 3), 
             .groups = 'drop') %>%
   arrange(stressor, desc(n_gps_no_exp))
 
 null_exposures <- spp_traits %>%
-  select(species, taxon) %>%
-  anti_join(spp_exposure, by = c('species', 'taxon')) %>%
+  select(gap, stage) %>%
+  anti_join(spp_exposure, by = c('gap', 'stage')) %>%
   distinct()
 
 cleared_exposure <- spp_exposure_wildlife_strike %>%
   filter(override)
 
-write_csv(cleared_exposure, here_anx('External Data/int/BOTH_BOTH_cleared_exposure.csv'))
+write_csv(cleared_exposure, here_anx('External Data/int/gap_stage_cleared_exposure.csv'))
 ```
 
 ### These species are not listed as potential exposure to these stressors: 
@@ -575,11 +578,11 @@ Since the vulnerability is based on rescaled sensitivity and ad cap based on the
 
 ```{r vulnerability calc helper functions}
 spp_scores_mean <- spp_sens %>%
-  left_join(spp_adcap_gen, by = c('taxon', 'species')) %>%
-  left_join(spp_adcap_spec, by = c('taxon', 'species', 'stressor')) %>%
+  left_join(spp_adcap_gen, by = c('gap', 'stage')) %>%
+  left_join(spp_adcap_spec, by = c('gap', 'stage', 'stressor')) %>%
   drop_na()
 
-write_csv(spp_scores_mean, here_anx('External Data/int/BOTH_spp_scores_mean.csv'))
+write_csv(spp_scores_mean, here_anx('External Data/int/gap_stage_spp_scores_mean.csv'))
 
 ref_values <- spp_scores_mean %>%
   group_by(stressor) %>%
@@ -610,29 +613,38 @@ calc_vuln <- function(x) {
 ``` {r calc vulnerability for all spp}
 spp_vuln_all <- spp_scores_mean %>%
   calc_vuln() %>%
-  select(taxon, species, stressor, 
+  select(gap, stage, stressor, 
          sens_score, adcap_gen_score, adcap_spec_score, vuln_raw) %>%
-  left_join(spp_exposure, by = c('species', 'taxon', 'stressor')) %>%
+  left_join(spp_exposure, by = c('gap', 'stage', 'stressor')) %>%
   mutate(vuln_raw = vuln_raw * exposure_mod) %>%
   distinct()
+
+### Creating a new category of all new stages that don't include the originals to evaluate against original later
+spp_vuln_all <- spp_vuln_all %>% 
+  bind_rows(filter(spp_vuln_all, stage != 'original')) %>% 
+  group_by(gap, stage, stressor) %>%
+  mutate(stage = replace(stage, duplicated(stage), 'all')) %>% 
+  ungroup()
 
 spp_vuln_rescale <- spp_vuln_all %>%
   ungroup() %>%
   mutate(vuln = vuln_raw / max(vuln_raw)) %>%
-  arrange(taxon, species, stressor)
+  arrange(gap, stage, stressor)
 
-spp_vuln_rescale_taxa <- spp_vuln_rescale %>%
-  select(taxon, species) %>%
+spp_vuln_rescale_stage <- spp_vuln_rescale %>%
+  select(gap, stage) %>%
   distinct() %>%
-  arrange(taxon, species) %>%
+  arrange(gap, stage) %>%
   mutate(vuln_tx_id = 1:n())
+
 str_lookup <- spp_vuln_rescale %>%
   select(stressor) %>%
   distinct() %>%
   arrange(stressor) %>%
   mutate(vuln_str_id = 1:n())
+
 spp_vuln_rescale_score <- spp_vuln_rescale %>%
-  left_join(spp_vuln_rescale_taxa, by = c('taxon', 'species')) %>%
+  left_join(spp_vuln_rescale_stage, by = c('gap', 'stage')) %>%
   left_join(str_lookup, by = 'stressor') %>%
   select(vuln_tx_id, vuln_str_id, vuln) %>%
   mutate(vuln = round(vuln, 5))
@@ -641,14 +653,14 @@ spp_vuln_rescale_score <- spp_vuln_rescale %>%
 Save the vulnerability scores for Github, broken into subtables for file size.  This is the info most useful for the typical user.
 
 ``` {r write just vulnerability scores}
-write_csv(spp_vuln_rescale_taxa,  here('_output/BOTH_spp_vuln_from_traits_tx.csv'))
-write_csv(str_lookup,             here('_output/BOTH_spp_vuln_from_traits_str.csv'))
-write_csv(spp_vuln_rescale_score, here('_output/BOTH_spp_vuln_from_traits_score.csv'))
+write_csv(spp_vuln_rescale_stage,  here('_output/gap_stage_spp_vuln_from_traits_tx.csv'))
+write_csv(str_lookup,             here('_output/gap_stage_spp_vuln_from_traits_str.csv'))
+write_csv(spp_vuln_rescale_score, here('_output/gap_stage_spp_vuln_from_traits_score.csv'))
 
 ### to reassemble just vuln scores:
-spp_vuln_scores <- fread(here('_output/BOTH_spp_vuln_from_traits_score.csv')) %>%
-  left_join(fread(here('_output/BOTH_spp_vuln_from_traits_str.csv'))) %>%
-  left_join(fread(here('_output/BOTH_spp_vuln_from_traits_tx.csv'))) %>%
+spp_vuln_scores <- fread(here('_output/gap_stage_spp_vuln_from_traits_score.csv')) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_tx.csv'))) %>%
   select(-vuln_tx_id, -vuln_str_id)
 
 ```
@@ -657,23 +669,23 @@ Write out the full scores (including sensitivity, spec and gen ad capacity, expo
 
 ``` {r save out full scores}
 spp_vuln_resc_all_scores <- spp_vuln_rescale %>%
-  left_join(spp_vuln_rescale_taxa, by = c('taxon', 'species')) %>%
+  left_join(spp_vuln_rescale_stage, by = c('gap','stage')) %>%
   left_join(str_lookup, by = 'stressor') %>%
   select(vuln_tx_id, vuln_str_id, 
          sens_score, adcap_gen_score, adcap_spec_score, 
          exposure_mod, vuln)
   
-write_csv(spp_vuln_rescale_taxa, 
-          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_tx.csv'))
+write_csv(spp_vuln_rescale_stage, 
+          here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_stage.csv'))
 write_csv(str_lookup, 
-          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_str.csv'))
+          here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_str.csv'))
 write_csv(spp_vuln_resc_all_scores, 
-          here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_all_scores.csv'))
+          here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_all_scores.csv'))
 
 ### to reassemble all scores incl components:
-spp_vuln_scores_all <- fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_all_scores.csv')) %>%
-  left_join(fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_str.csv'))) %>%
-  left_join(fread(here_anx('External Data/3_vuln_score_traits/BOTH_spp_vuln_from_traits_tx.csv'))) %>%
+spp_vuln_scores_all <- fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_all_scores.csv')) %>%
+  left_join(fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_stage.csv'))) %>%
   select(-vuln_tx_id, -vuln_str_id)
 # cp <- spp_vuln_scores_all %>% filter(species == 'caulophryne polynema')
 # cs <- spp_vuln_scores_all %>% filter(species == 'centrophryne spinulosa')
@@ -700,61 +712,67 @@ strs_to_keep <- c('biomass_removal',
 plot_df <- spp_vuln_rescale %>% 
   filter(stressor %in% strs_to_keep) %>%
   distinct() %>%
-  mutate(across(is.numeric, ~round(., 4)))
+  mutate(across(where(is.numeric), ~round(., 4)))
 
-taxa <- plot_df$taxon %>% unique()
+stage <- plot_df$stage %>% unique()
                 
-for(t in taxa) { # t <- taxa[6]
-  t_vuln <- plot_df %>%
-    filter(taxon == t)
+for(t in stage) {# t <- taxa[6]
+  t_vuln <- plot_df %>% 
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
+    #filter(stage == t)
   mean_str_vuln <- t_vuln %>%
-    group_by(stressor) %>%
+    group_by(gap, stage, stressor) %>%
     summarize(vuln = mean(vuln), .groups = 'drop')
   mean_tot_vuln <- t_vuln %>%
+    group_by(gap, stage) %>%
     summarize(vuln = mean(vuln))
   
   
   vuln_plot <- ggplot(t_vuln, 
-                      aes(x = stressor, y = vuln)) +
+                      aes(x = stressor, y = vuln, colour = gap)) +
     theme_ohara(base_size = 12) +
-    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln), color = 'red') +
-    geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
-    geom_point(data = mean_str_vuln, 
-               shape = 21, size = 3, 
-               alpha = 1, color = 'yellow', fill = 'red') +
+    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln, colour = gap)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(aes(color = gap), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_vuln,
+               aes(color = gap),
+               shape = 21, size = 3,
+               alpha = 1) +
     ylim(0, 1) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
           strip.background = element_rect(fill = 'grey90')) +
-    labs(title = paste0('Vulnerability: ', t))
+    labs(title = paste0('Vulnerability'))+
+    facet_wrap(~stage)
   
-  plotfile <- sprintf('figs/BOTH_vuln_plot_from_traits_%s.png', t)
+  plotfile <- sprintf('figs/gap_stage_vuln_plot_from_traits_all.png')
   ggsave(plot = vuln_plot, filename = plotfile, 
          width = 8, height = 8, dpi = 300)
   # cat(sprintf('![](%s)\n', plotfile))
-}
-# knitr::include_graphics(here('figs/vuln_plot.png'))
+  } 
+
+vuln_plot
 
 ```
 
 ### Vulnerability by stressor across all taxa
 ```{r}
-str_mean_vuln <- plot_df %>%
-  group_by(stressor) %>%
-  summarize(vuln = mean(vuln, na.rm = TRUE), .groups = 'drop')
-all_mean_vuln <- plot_df %>%
-  summarize(vuln = mean(vuln, na.rm = TRUE))
-x <- ggplot(plot_df, aes(x = stressor, y = vuln, color = taxon)) +
-  theme_ohara(base_size = 12) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
-  geom_hline(data = all_mean_vuln, aes(yintercept = vuln), color = 'red') +
-  geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
-  geom_point(data = str_mean_vuln, 
-             shape = 21, size = 3, 
-             alpha = 1, color = 'yellow', fill = 'black') +
-  ylim(0, 1)
-x
-
-ggsave(here('figs/BOTH_vuln_by_stress_all_taxa.png'), height = 6, width = 6, dpi = 300)
+# str_mean_vuln <- plot_df %>%
+#   group_by(stressor) %>%
+#   summarize(vuln = mean(vuln, na.rm = TRUE), .groups = 'drop')
+# all_mean_vuln <- plot_df %>%
+#   summarize(vuln = mean(vuln, na.rm = TRUE))
+# x <- ggplot(plot_df, aes(x = stressor, y = vuln, color = taxon)) +
+#   theme_ohara(base_size = 12) +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+#   geom_hline(data = all_mean_vuln, aes(yintercept = vuln), color = 'red') +
+#   geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
+#   geom_point(data = str_mean_vuln, 
+#              shape = 21, size = 3, 
+#              alpha = 1, color = 'yellow', fill = 'black') +
+#   ylim(0, 1)
+# x
+# 
+# ggsave(here('figs/BOTH_vuln_by_stress_all_taxa.png'), height = 6, width = 6, dpi = 300)
 ```
 
 
@@ -762,57 +780,57 @@ ggsave(here('figs/BOTH_vuln_by_stress_all_taxa.png'), height = 6, width = 6, dpi
 
 ``` {r, results = 'asis'}
 
-stressors <- plot_df$stressor %>% unique()
-                
-for(s in stressors) {  
-  s_vuln <- plot_df %>%
-    filter(stressor == s)
-  mean_str_vuln <- s_vuln %>%
-    group_by(taxon) %>%
-    summarize(vuln = mean(vuln), .groups = 'drop')
-  mean_tot_vuln <- s_vuln %>%
-    summarize(vuln = mean(vuln))
-  
-  
-  vuln_plot <- ggplot(s_vuln, 
-                      aes(x = taxon, y = vuln)) +
-    theme_ohara(base_size = 12) +
-    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln), color = 'red') +
-    geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
-    geom_point(data = mean_str_vuln, 
-               shape = 21, size = 3, 
-               alpha = 1, color = 'yellow', fill = 'red') +
-    ylim(0, 1) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
-          strip.background = element_rect(fill = 'grey90')) +
-    labs(title = paste0('Vulnerability: ', s))
-  
-  plotfile <- sprintf('figs/BOTH_vuln_plot_by_stressor_%s.png', s)
-  ggsave(plot = vuln_plot, filename = plotfile, 
-         width = 8, height = 8, dpi = 300)
-  # cat(sprintf('![](%s)\n', plotfile))
+# stressors <- plot_df$stressor %>% unique()
+#                 
+# for(s in stressors) {  
+#   s_vuln <- plot_df %>%
+#     filter(stressor == s)
+#   mean_str_vuln <- s_vuln %>%
+#     group_by(taxon) %>%
+#     summarize(vuln = mean(vuln), .groups = 'drop')
+#   mean_tot_vuln <- s_vuln %>%
+#     summarize(vuln = mean(vuln))
+#   
+#   
+#   vuln_plot <- ggplot(s_vuln, 
+#                       aes(x = taxon, y = vuln)) +
+#     theme_ohara(base_size = 12) +
+#     geom_hline(data = mean_tot_vuln, aes(yintercept = vuln), color = 'red') +
+#     geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
+#     geom_point(data = mean_str_vuln, 
+#                shape = 21, size = 3, 
+#                alpha = 1, color = 'yellow', fill = 'red') +
+#     ylim(0, 1) +
+#     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+#           strip.background = element_rect(fill = 'grey90')) +
+#     labs(title = paste0('Vulnerability: ', s))
+#   
+#   plotfile <- sprintf('figs/BOTH_vuln_plot_by_stressor_%s.png', s)
+#   ggsave(plot = vuln_plot, filename = plotfile, 
+#          width = 8, height = 8, dpi = 300)
+#   # cat(sprintf('![](%s)\n', plotfile))
 }
 
 ```
 
 ### Vulnerability by taxon across all stressors
 ```{r}
-tx_mean_vuln <- plot_df %>%
-  group_by(taxon) %>%
-  summarize(vuln = mean(vuln, na.rm = TRUE), .groups = 'drop')
-all_mean_vuln <- plot_df %>%
-  summarize(vuln = mean(vuln, na.rm = TRUE))
-x <- ggplot(plot_df, aes(x = taxon, y = vuln, color = stressor)) +
-  theme_ohara(base_size = 12) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
-  geom_hline(data = all_mean_vuln, aes(yintercept = vuln), color = 'red') +
-  geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
-  geom_point(data = tx_mean_vuln, 
-             shape = 21, size = 3, 
-             alpha = 1, color = 'yellow', fill = 'black') +
-  ylim(0, 1)
-
-x
-
-ggsave(here('figs/BOTH_vuln_taxa_all_stressors.png'), height = 6, width = 6, dpi = 300)
+# tx_mean_vuln <- plot_df %>%
+#   group_by(taxon) %>%
+#   summarize(vuln = mean(vuln, na.rm = TRUE), .groups = 'drop')
+# all_mean_vuln <- plot_df %>%
+#   summarize(vuln = mean(vuln, na.rm = TRUE))
+# x <- ggplot(plot_df, aes(x = taxon, y = vuln, color = stressor)) +
+#   theme_ohara(base_size = 12) +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +
+#   geom_hline(data = all_mean_vuln, aes(yintercept = vuln), color = 'red') +
+#   geom_jitter(size = 1, alpha = .6, width = .2, height = .02) +
+#   geom_point(data = tx_mean_vuln, 
+#              shape = 21, size = 3, 
+#              alpha = 1, color = 'yellow', fill = 'black') +
+#   ylim(0, 1)
+# 
+# x
+# 
+# ggsave(here('figs/BOTH_vuln_taxa_all_stressors.png'), height = 6, width = 6, dpi = 300)
 ```

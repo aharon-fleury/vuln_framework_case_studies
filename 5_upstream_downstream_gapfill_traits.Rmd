@@ -73,6 +73,7 @@ spp_thermal_tol <- read_csv(here('_raw_data/aquamaps',
   rename(spp = name, val_new = trait_value, prob_new = trait_prob) %>%
   filter(rank == 'species') %>%
   select(-rank) %>%
+  filter(spp == 'chelonia mydas') %>% 
   distinct()
 
 match_tx_fix <- match_df %>%
@@ -93,7 +94,8 @@ non_mut_excl <- c('adult_mobility', 'biomineral', 'zone',
                   'calcium_carbonate_structure_location', 
                   'depth_min_max', 'respiration_structures', 
                   'across_stage_dependent_habitats_condition', 
-                  'within_stage_dependent_habitats_condition')
+                  'within_stage_dependent_habitats_condition',
+                  'sub_population_dependence_on_particular_sites')
 
 trait_fill_by_rank <- function(ranks) {
   rank_lvls <- c('kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species')
@@ -136,7 +138,7 @@ message('...done summarizing class!')
 
 ```{r combine gapfill value dataframes and save out}
 gapfill_traits_all_spp <- match_tx_fix %>%
-  select(species = spp, category, trait, trait_value, trait_prob, phylum:genus, match) %>%
+  select(species = spp, category, trait, trait_value, trait_prob, stage, gap, phylum:genus, match) %>%
   mutate(gapfill = 'none') %>%
   bind_rows(traits_fill_gen, 
             traits_fill_fam, 
@@ -275,12 +277,12 @@ Check species counts by taxon, excluding spp with only 4 or fewer traits
 
 ```{r}
 spp_to_taxon <- match_tx_fix %>% 
-  select(species = spp, taxon) %>% 
+  select(species = spp, stage, gap) %>% 
   distinct()
 
 check_spp <- gapfill_quality %>%
   left_join(spp_to_taxon, by = 'species') %>%
-  group_by(taxon) %>%
+  group_by(stage, gap) %>%
   summarize(mean_n_traits = round(mean(n_traits), 2),
             n_spp = n_distinct(species),
             mean_gf_quality = sum(mean_gapfill * n_traits) / sum(n_traits),
@@ -304,15 +306,15 @@ Similar to script 4, for file size and nimbleness, we will break down the file i
 
 
 ```{r}
-spp_to_taxon <- match_tx_fix %>% 
-  select(species = spp, taxon) %>% 
+spp_to_stage <- match_tx_fix %>% 
+  select(stage, gap, species = spp) %>% 
   distinct()
 
-gf_taxa <- traits_all_gf_clean %>%
-  select(species) %>%
+gf_stage <- traits_all_gf_clean %>%
+  select(stage, gap, species) %>%
   distinct() %>%
-  left_join(spp_to_taxon, by = 'species') %>%
-  arrange(taxon, species) %>%
+  left_join(spp_to_stage, by = c('gap', 'stage', 'species')) %>%
+  arrange(gap, stage) %>%
   mutate(gf_spp_id = 1:n())
 
 gf_traits <- traits_all_gf_clean %>%
@@ -328,13 +330,13 @@ gf_levels <- traits_all_gf_clean %>%
   mutate(gf_match_id = 1:n())
 
 gf_spp_traits <- traits_all_gf_clean %>%
-  left_join(gf_taxa, by = c('species')) %>%
+  left_join(gf_stage, by = c('gap', 'stage')) %>%
   left_join(gf_traits, by = c('category', 'trait', 'trait_value')) %>%
   left_join(gf_levels, by = c('match', 'gapfill')) %>%
   select(gf_spp_id, gf_trait_id, gf_match_id, trait_prob) %>%
   distinct()
   
-write_csv(gf_taxa,       
+write_csv(gf_stage,       
           here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_taxa.csv'))
 write_csv(gf_traits,     
           here_anx('External Data/2_gapfill_traits/spp_up_down_gapfill_traits.csv'))

@@ -56,7 +56,10 @@ spp_data_raw <- lapply(spp_csvs, FUN = process_csv) %>%
   setNames(taxa) %>%
   bind_rows(.id = 'taxon') %>%
   mutate(trait_value = str_split(trait_value, pattern = ';')) %>%
-  unnest(trait_value)
+  unnest(trait_value) %>%
+  separate(spp_gp, c("genus", "species", "stage"), " ") %>%
+  unite("spp_gp","genus":"species", sep = " ") %>%
+  mutate( stage = ifelse(is.na(stage), "original", stage))
 
 ```
 
@@ -108,7 +111,8 @@ non_mut_excl <- c('adult_mobility', 'biomineral',
                   'calcium_carbonate_structure_location', 
                   'depth_min_max', 'respiration_structures', 
                   'across_stage_dependent_habitats_condition', 
-                  'within_stage_dependent_habitats_condition', 'zone')
+                  'within_stage_dependent_habitats_condition', 
+                  'sub_population_dependence_on_particular_sites', 'zone')
 
 spp_valid <- spp_validcheck %>%
   filter(valid) %>%
@@ -118,7 +122,7 @@ spp_valid <- spp_validcheck %>%
          trait    = str_replace_all(trait, '[^A-Za-z0-9]+', '_'),
          trait    = str_replace_all(trait, '^_|_$', '')) %>%
   mutate(spp_gp = str_replace_all(spp_gp, '\\n', ' ')) %>%
-  group_by(trait, spp_gp) %>%
+  group_by(trait, spp_gp, stage) %>%
   mutate(trait_prob = ifelse(trait %in% non_mut_excl, 1, 1/n_distinct(trait_value))) %>%
   ungroup()
 ```
@@ -139,7 +143,7 @@ spp_valid <- spp_valid %>%
 Include thermal tolerance ranges from AquaMaps envelopes; these are just temporary and will be overwritten at the species level after downfilling.
 ```{r}
 spp_gps_df <- spp_valid %>%
-  select(taxon, spp_gp, n_spp_gps) %>%
+  select(taxon, spp_gp, n_spp_gps, stage) %>%
   distinct()
 
 spp_gp_thermal_tol <- read_csv(here('_raw_data/aquamaps', 
@@ -151,6 +155,14 @@ spp_gp_thermal_tol <- read_csv(here('_raw_data/aquamaps',
 
 spp_valid_plus_thermal <- spp_valid %>%
   bind_rows(spp_gp_thermal_tol)
+
+### separating out stages from names and adding 'original' to the Butt et al turtle. Finally duplicating the rows and identifying which ones will be gapfilled in the following markdowns.
+spp_valid_plus_thermal2 <- spp_valid_plus_thermal %>% 
+  bind_rows(spp_valid_plus_thermal) %>%
+  mutate (gap = "no") %>%
+  group_by(category, trait, trait_value, stage) %>%
+  mutate(gap = replace(gap, duplicated(gap), "yes")) %>% 
+  ungroup()
 
 # spp_gp_thermal_tol$spp_gp %>% n_distinct()
 
