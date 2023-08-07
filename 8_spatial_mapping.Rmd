@@ -19,48 +19,10 @@ library(sf)
 library(terra)
 library(raster)
 library(broom)
+library(ggridges)
 source(here('common_fxns.R'))
 
 
-```
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r view raster}
-worldtif_file_f <- here('_raw_data/spatial', 
-                        'world_NatEr1_SR_Wat_Lrg/NE1_HR_LC_SR_W.tif')
-worldtif_file <- raster(worldtif_file_f)
-natearth_obj <- brick(worldtif_file_f) 
-natearth_extent <- extent(-95, -60, 5, 35)
-natearth_raster <- crop(natearth_obj, natearth_extent)
-plotRGB(natearth_raster, interpolate = TRUE)
-
-coastline_shapefile <- st_read(here('_raw_data/spatial', 'ne_10m_coastline/ne_10m_coastline.shp'))
-coastline_shapefile <- st_transform(coastline_shapefile, crs(natearth_raster))
-options(progress = "text", chunksize = 100)
-blank_raster <- raster(nrow=natearth_raster@nrows, ncol=natearth_raster@ncols, extent(natearth_raster), crs=natearth_raster@crs, vals=NA)
-raster_overlay <- rasterize(coastline_shapefile, natearth_raster)
-overlay_result <- overlay(natearth_raster, raster_overlay, fun = function(x,y){return(x*y)})
-plotRGB(overlay_result, interpolate = TRUE)
-
-plotRGB(natearth_raster, interpolate = TRUE)
-lines(coastline_shapefile)
-
-buffer_in_km <- 30
-buffer_as_arc_degrees <- buffer_in_km/40075 * 360
-buffer <- coastline_shapefile %>%
-  st_buffer(buffer_as_arc_degrees)
-crs <- st_crs(coastline_shapefile)
-buffer <- st_set_crs(buffer, crs)
-buffer_raster <- rasterize(buffer, natearth_raster)
-
-
-# output <- here('_raw_data/spatial')
-# writeOGR(coastline_polygon, output, "coastlines", driver = 'ESRI Shapefile' )
 ```
 
 ```{r caribbean map}
@@ -94,7 +56,7 @@ countries_shp_bermuda <- countries_shp %>%
   st_transform(crs = st_crs("+proj=laea +lon_0=-75 +lat_0=21 +datum=WGS84 +units=m +no_defs"))
 ```
 
-```{r stage1 poly}
+```{r stage1 poly, eval = FALSE}
 
 #Generating the stage 1 polygons off the coastlines of Florida and Costa Rica
 
@@ -135,15 +97,20 @@ stg1_poly <- st_difference(stg1_poly_tf, st_union(countries_shp_car))
 
 stage1_plot <- ggplot() + 
   geom_sf(data = countries_shp_car) +
-  geom_sf(data = stg1_poly, fill = "deepskyblue1")
+  geom_sf(data = stg1_poly_test, fill = "deepskyblue1")
   
 ggsave(here('_data/sp_poly/stage1_polygon.png'), height = 6, width = 6, dpi = 300)
 
 knitr::include_graphics(here('_data/sp_poly/stage1_polygon.png'))
+
+st_write(stg1_poly, "int/spatial/stg1_poly.gpkg")
+
+
   
 
 ```
-```{r stage2 poly}
+
+```{r stage2 poly, eval = FALSE}
 
 #Generating the stage 2 polygon in the midst of the two gyres.
 stg2_mtrx <- matrix(c(
@@ -155,8 +122,8 @@ stg2_mtrx <- matrix(c(
   -74.63, 25.05, #BRFL
   -75.03, 28.88, #TLFL
   -67.04, 31.24,
-  -58.25, 27.93,
-  -59.14, 15.14,
+  -60.25, 27.93,
+  -60.14, 15.14,
   -67.09, 13.69,
   -72.04, 13.49,
   -77.08, 13.25
@@ -174,18 +141,21 @@ stg2_poly <- st_difference(stg2_poly_tf, st_union(countries_shp_car))
 
 
 
-stage1_plot <- ggplot() + 
+stage2_plot <- ggplot() + 
   geom_sf(data = countries_shp_car) +
   geom_sf(data = stg2_poly, fill = "deepskyblue1")
 
 ggsave(here('_data/sp_poly/stage2_polygon.png'), height = 6, width = 6, dpi = 300)
 
 knitr::include_graphics(here('_data/sp_poly/stage2_polygon.png'))
+
+st_write(stg2_poly, "int/spatial/stg2_poly.gpkg")
+
   
 
 ```
 
-```{r stage3_4 poly}
+```{r stage3_4 poly, eval = FALSE}
 
 #Creating a polygon using a rough estimate of 30 km from the coastline for Stage 3 and 4 turtles. Maps show most of their time is roughly within a 30 km distance although occasionally some tracks cross the Caribbean. Focused on the majority of the time, which is feeding on seagrass within the 30 km distance. Bermuda was the exeption where there the shallow water quickly disappears <5km from the island.
 
@@ -248,7 +218,7 @@ car_poly <- st_intersection(buffer_poly, car_poly_tf)
 
 
 stg3_4_plot <- ggplot()+
-  geom_sf(data = car_poly_tf)
+  # geom_sf(data = car_poly_tf)
   geom_sf(data = car_poly, fill = "deepskyblue1") +
   geom_sf(data = countries_shp_car)
 
@@ -256,11 +226,13 @@ ggsave(here('_data/sp_poly/stage3_4_polygon.png'), height = 6, width = 6, dpi = 
 
 knitr::include_graphics(here('_data/sp_poly/stage3_4_polygon.png'))
 
+st_write(car_poly, "int/spatial/stg3_4_poly.gpkg")
+
+
 ```
 
-You can also embed plots, for example:
-
-```{r aquamaps, echo=FALSE}
+```{r aquamaps, echo=FALSE, eval = FALSE}
+#We are taking aquamaps Chelonia mydas data and merging it bounding it to the Caribbean region of interest, using the information provided by aquamaps (0.5 x 0.5 degree grid cell, crs = WGS84).
 
 amturtle <- data.table::fread(here('_raw_data/spatial', 'aquamaps_mydas.csv'), skip = 13)
 
@@ -269,8 +241,6 @@ amturtle_sf <- amturtle %>%
   st_set_crs(4326) %>% 
   st_crop(xmin = -60, xmax = -90,
           ymin = 7, ymax = 35) 
-# %>% 
-#   st_transform(crs = st_crs("+proj=laea +lon_0=-75 +lat_0=21 +datum=WGS84 +units=m +no_defs")) 
 
 countries_shp_car_WGS84 <- countries_shp %>% 
   st_make_valid() %>% 
@@ -300,67 +270,52 @@ ggplot() +
   geom_sf(data = amturtle_sf, aes(fill = `Overall Probability`)) +
   geom_sf(data = countries_shp_car)
 
+st_write(grid_poly, "int/spatial/am_grid.gpkg")
+
+
 ```
 
-```{r importing Caseys stressor mols, echo=FALSE}
+```{r importing Caseys stressor mols, echo=FALSE, eval = FALSE}
 
+grid_poly <- st_read("int/spatial/am_grid.gpkg")
 
 am_rast <- terra::rast(grid_poly)
-
 am_df <- am_rast %>% 
   as.data.frame(xy = TRUE)
 
+str_vuln_lookup_f <- here('_raw_data/stressor_vulnerability_lookup.csv')
+str_vuln_lookup_raw <- read_csv(str_vuln_lookup_f)
+str_vuln_lookup <- str_vuln_lookup_raw %>%
+  filter(!stressor %in% c('biomass_removal', 'bycatch', 'sst_rise'))
 
-mp_tif <- terra::rast(here('_data/stressors_mol', 'microplastics_2015.tif'))
+str_fs <- list.files(here('_data/stressors_mol'), full.names = TRUE)
+str_fs <- str_fs[str_detect(str_fs, paste(str_vuln_lookup$stressor, collapse = '|'))]
+str_stack <- terra::rast(str_fs) %>%
+  setNames(basename(str_fs) %>% str_remove('_[0-9]{4}.tif'))
 
-mp_df <- mp_tif %>% 
+str_stack_df <- str_stack %>% 
   as.data.frame(xy = TRUE)
 
-mp_sf <- mp_df %>% 
+str_stack_df <- str_stack_df %>% 
   st_as_sf(coords = c("x", "y"), crs = "PROJCRS[\"unknown\",\n    BASEGEOGCRS[\"GCS_unknown\",\n        DATUM[\"World Geodetic System 1984\",\n            ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n                LENGTHUNIT[\"metre\",1]],\n            ID[\"EPSG\",6326]],\n        PRIMEM[\"Greenwich\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433]]],\n    CONVERSION[\"unnamed\",\n        METHOD[\"Mollweide\"],\n        PARAMETER[\"Longitude of natural origin\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433],\n            ID[\"EPSG\",8802]],\n        PARAMETER[\"False easting\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8806]],\n        PARAMETER[\"False northing\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8807]]],\n    CS[Cartesian,2],\n        AXIS[\"(E)\",east,\n            ORDER[1],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]],\n        AXIS[\"(N)\",north,\n            ORDER[2],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]]]" )
 
-mp_car <- mp_sf %>% 
+str_stack_car <- str_stack_df %>% 
   st_transform(crs = 4326) %>% 
   st_crop(xmin = -60, xmax = -90,
           ymin = 7, ymax = 35)
-
-mp_car_0 <- mp_car %>% 
-  !is.na(microplastics_2015)
-
-
-ship_tif <- terra::rast(here('_data/stressors_mol', 'shipping_all_unweighted_2021.tif'))
-
-ship_df <- ship_tif %>% 
-  as.data.frame(xy = TRUE)
-
-ship_sf <- ship_df %>% 
-  st_as_sf(coords = c("x", "y"), crs = "PROJCRS[\"unknown\",\n    BASEGEOGCRS[\"GCS_unknown\",\n        DATUM[\"World Geodetic System 1984\",\n            ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n                LENGTHUNIT[\"metre\",1]],\n            ID[\"EPSG\",6326]],\n        PRIMEM[\"Greenwich\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433]]],\n    CONVERSION[\"unnamed\",\n        METHOD[\"Mollweide\"],\n        PARAMETER[\"Longitude of natural origin\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433],\n            ID[\"EPSG\",8802]],\n        PARAMETER[\"False easting\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8806]],\n        PARAMETER[\"False northing\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8807]]],\n    CS[Cartesian,2],\n        AXIS[\"(E)\",east,\n            ORDER[1],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]],\n        AXIS[\"(N)\",north,\n            ORDER[2],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]]]" )
-
-ship_car <- ship_sf %>% 
-  st_transform(crs = 4326) %>% 
-  st_crop(xmin = -60, xmax = -90,
-          ymin = 7, ymax = 35)
-
-#The crs is reprojecting but the units fo the bounding box don't change, why?
-
-    
-# %>% 
-#   st_transform(crs = st_crs("+proj=laea +lon_0=-75 +lat_0=21 +datum=WGS84 +units=m +no_defs")) 
-
-grid_mp <- sf::st_make_grid(mp_sf,
-                          crs = '+proj=moll +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m',
-                          square = TRUE,
-                          cellsize = c(10000, 10000), 
-                          what = "polygons") %>% 
-  sf::st_sf() 
 
 #Making grid in mollweide projection to extract bounding box values.
+
 grid_basis <- grid %>% 
   st_transform(crs = "PROJCRS[\"unknown\",\n    BASEGEOGCRS[\"GCS_unknown\",\n        DATUM[\"World Geodetic System 1984\",\n            ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n                LENGTHUNIT[\"metre\",1]],\n            ID[\"EPSG\",6326]],\n        PRIMEM[\"Greenwich\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433]]],\n    CONVERSION[\"unnamed\",\n        METHOD[\"Mollweide\"],\n        PARAMETER[\"Longitude of natural origin\",0,\n            ANGLEUNIT[\"Degree\",0.0174532925199433],\n            ID[\"EPSG\",8802]],\n        PARAMETER[\"False easting\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8806]],\n        PARAMETER[\"False northing\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8807]]],\n    CS[Cartesian,2],\n        AXIS[\"(E)\",east,\n            ORDER[1],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]],\n        AXIS[\"(N)\",north,\n            ORDER[2],\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]]]")
 
-#Mollweide crop
+grid_basis
+#Bounding box:  xmin: -8978506 ymin: 864688.7 xmax: -5228493 ymax: 4337580
+
+
+#Mollweide crop using above bounding information from grid_basis
 grid_car <- grid_mp %>% 
-  st_crop(xmin = -5228493 , xmax = -8978506,
+  st_crop(xmin = -8978506 , xmax = -5228493,
           ymin = 864688.7, ymax = 4337580)
 
 grid_car_wgs <- grid_car %>% 
@@ -368,44 +323,569 @@ grid_car_wgs <- grid_car %>%
   st_crop(xmin = -60, xmax = -90,
           ymin = 7, ymax = 35)
 
-grid_ft_mp <- st_join(grid_car_wgs, mp_car_0) %>% 
+
+str_grid <- st_join(grid_car_wgs, str_stack_car) %>% 
   st_transform(crs = st_crs("+proj=laea +lon_0=-75 +lat_0=21 +datum=WGS84 +units=m +no_defs")) 
 
-grid_ft_mp2 <- grid_ft_mp %>% 
-  filter(!is.na(microplastics_2015))
 
-grid_ft_ship <- st_join(grid_car_wgs, ship_car) %>% 
-  st_transform(crs = st_crs("+proj=laea +lon_0=-75 +lat_0=21 +datum=WGS84 +units=m +no_defs")) 
 
-write_rds(grid_ft_ship, file = here('_data/stressors_mol/unweighted_shipping_car.rds'))
+write_rds(grid_ft_ship, file = here('_data/stressors_mol/str_grid.rds'))
+
+st_write(str_grid, "int/spatial/str_grid.gpkg")
 
 
 ggplot() + 
-  geom_sf(data = grid_ft_mp2, aes(color = `microplastics_2015`)) +
+  geom_sf(data = str_grid, aes(fill = `sst_extremes`), color = NA) +
   geom_sf(data = countries_shp_car)
 
-  ggplot() + 
-  geom_sf(data = grid_ft_ship, aes(fill = `shipping_all_unweighted_2021`), color = NA) + 
-  geom_sf(data = countries_shp_car) 
+  plotfile <- sprintf('figs/sst_extremes_og.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
 
 ```
 
 ```{r area-weighted interpolation of polygons, echo=FALSE}
 
-# grid_ft_shp <- read_rds(here('_data/stressors_mol/unweighted_shipping_car.rds'))
 # https://r.geocompx.org/spatial-operations.html
 
 
+#Area-weighted interpolation of the stressors to the Caribbean grid polygons then joined with the Aquamaps occurrence data. Interpolation takes the mean (i.e. ext = FALSE).
 
-awi <- st_interpolate_aw(grid_ft_ship, grid_poly, extensive = FALSE)
+grid_poly <- st_read("int/spatial/am_grid.gpkg")
+str_grid <- st_read("int/spatial/str_grid.gpkg")
 
-test2 <- st_join(grid_poly, awi, join = st_within)
+str_aw <- st_interpolate_aw(str_grid %>% replace(., is.na(.), 0), grid_poly, extensive = FALSE)
 
-ggplot() + 
-  geom_sf(data = test)
+str_am_join <- st_join(grid_poly, str_aw, join = st_within)
 
-ggplot() + 
-  geom_sf(data = test3, aes(fill = `shipping_all_unweighted_2021`)) +
+
+plot <- ggplot() + 
+  geom_sf(data = str_am_join, aes(fill = `sst_extremes`)) +
   geom_sf(data = countries_shp_car) 
+
+  plotfile <- sprintf('figs/am_sst_extremes.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+
+
+#area-weighted for stage 1 and 2 hypothetical polygons
+
+stg1_poly <- st_read("int/spatial/stg1_poly.gpkg")
+str_aw_stg1 <- st_interpolate_aw(str_grid %>% replace(., is.na(.), 0), stg1_poly, extensive = FALSE)
+
+str_am_stg1_join <- st_join(stg1_poly, str_aw_stg1, join = st_within)
+
+stg2_poly <- st_read("int/spatial/stg2_poly.gpkg")
+str_aw_stg2 <- st_interpolate_aw(str_grid %>% replace(., is.na(.), 0), stg2_poly, extensive = FALSE)
+
+str_am_stg2_join <- st_join(stg2_poly, str_aw_stg2, join = st_within)
+
+```
+
+```{r reassemble vuln scores and attach to aquamaps sf, echo=FALSE}
+
+### to reassemble just vuln scores:
+spp_vuln_scores <- fread(here('_output/gap_stage_spp_vuln_from_traits_score.csv')) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_tx.csv'))) %>%
+  dplyr::select(-vuln_tx_id, -vuln_str_id) %>% 
+  dplyr::filter(gap == "yes")
+
+str_vuln_lookup_f <- here('_raw_data/stressor_vulnerability_lookup.csv')
+str_vuln_lookup_raw <- read_csv(str_vuln_lookup_f)
+str_vuln_lookup <- str_vuln_lookup_raw %>%
+  filter(!stressor %in% c('biomass_removal', 'bycatch', 'sst_rise'))
+
+str_cats <- colnames(str_am_join)[5:14]
+
+str_am_pivot <- str_am_join %>%
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "impact_score",
+               names_to = "stressor") %>%
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "stressor")) %>%
+  left_join(y = spp_vuln_scores %>% filter(stage != "all"),
+            by = c("vulnerability" = "stressor")) %>%
+  mutate(calc_score = impact_score * vuln * `Overall.Probability`) %>%
+  dplyr::select(-c("vulnerability", "stressor_group", "impact_score", "vuln"))
+
+str_am_wgt_vuln <- str_am_pivot %>%
+  pivot_wider(names_from = "stressor", values_from = c("calc_score"))
+
+ggplot(str_am_pivot, aes(x = calc_score, y = stressor), na.rm = TRUE) +
+         geom_density_ridges(aes(fill = stage), alpha = 0.3, na.rm = TRUE)
+  
+
+# ggsave(here('figs/all_stressors.png'), height = 6, width = 6, dpi = 300)
+
+ggplot(out, aes(x = sst_extremes, y = stage), na.rm = TRUE) +
+         geom_density_ridges()
+  
+
+# ggsave(here('figs/sst_extremes.png'), height = 6, width = 6, dpi = 300)
+
+
+
+
+
+#next steps summarize each of the stressors by stage (group_by), min, med, avg, max, sd
+#calc final vulnerability using original vuln values. 
+
+vuln_str_am_mean <- str_am_wgt_vuln %>% 
+  group_by(stage) %>% 
+  summarise_at(str_cats, list(mean), na.rm = TRUE) %>% 
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "mean",
+               names_to = "stressor")
+
+new_str_am <- ggplot(vuln_str_am_mean, aes(x = stressor, y = mean)) +
+  geom_point(aes(color = stage)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 10)) 
+
+ggsave(here('figs/weighted_stressors.png'), height = 6, width = 6, dpi = 300)
+
+knitr::include_graphics(here('figs/weighted_stressors.png'))
+
+#Replace old stressors with new weighted-stressor vuln scores
+
+spp_vuln_scores_am_weighted <- spp_vuln_scores %>% 
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "vulnerability")) %>% 
+  left_join(y = vuln_str_am_mean,
+            by = c("stressor.y" = "stressor", "stage" = "stage")) %>% 
+  mutate(vuln_wt = ifelse(is.na(mean), vuln, mean)) %>% 
+  mutate(new_str = ifelse(is.na(stressor.y), stressor, stressor.y)) %>% 
+  dplyr::select(c("stage", "stressor", "stressor.y", "new_str","vuln","vuln_wt")) %>% 
+  pivot_longer(cols = c("vuln", "vuln_wt"),
+               values_to = "values",
+               names_to = "type")
+
+spp_vuln_scores_am_sum <- spp_vuln_scores_am_weighted %>% 
+  group_by(stage, type) %>% 
+  summarise(total = sum(values),
+            .groups = 'drop') %>% 
+  arrange(type, factor(stage, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))) %>% 
+  filter(!stage == "all")
+
+strs_to_keep_new <- c('biomass_removal',
+                  'bycatch',
+                  'nutrient',
+                  'fishing_benthic_dest',
+                  'benth_str',
+                  'direct_human',
+                  'light_pollution',
+                  'plastic_pollution_microplastic',
+                  'shipping_all_unweighted',
+                  'sst_extremes',
+                  'ocean_acidification',
+                  'sea_level_rise',
+                  'sst_rise',
+                  'uv_radiation')
+plot_newvuln <- spp_vuln_scores_am_weighted %>% 
+  filter(new_str %in% strs_to_keep_new) %>%
+  distinct() %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+stage <- plot_newvuln$stage %>% unique()
+                
+
+  t_newvuln <- plot_newvuln %>% 
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
+    #filter(stage == t)
+  mean_str_newvuln <- t_newvuln %>%
+    group_by(stage, new_str, type) %>%
+    summarize(values = mean(values), .groups = 'drop')
+  mean_tot_newvuln <- t_newvuln %>%
+    group_by(stage, type) %>%
+    summarize(values = mean(values))
+  
+  
+vuln_plot <- ggplot(t_newvuln, 
+                      aes(x = new_str, y = values, colour = stage, shape = type)) +
+    theme_ohara(base_size = 12) +
+    geom_hline(data = mean_tot_newvuln, aes(yintercept = values, linetype = type)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(aes(color = stage, shape = type), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_newvuln,
+               aes(color = stage, shape = type),
+               shape = 21, size = 3,
+               alpha = 1) +
+    ylim(0, 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+          strip.background = element_rect(fill = 'grey90')) +
+    labs(title = paste0('Stressor-Weighted Vulnerability using Aquamaps Distributions'))+
+    facet_wrap(~stage)
+  
+  plotfile <- sprintf('figs/wt_vuln_plot_from_str_am.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+  # cat(sprintf('![](%s)\n', plotfile))
+  
+
+vuln_plot
+
+
+mycolors <- c("#F8766D", "#B79F00", "#00BA38", "#00BFC4", "#619CFF", "#F564E3")
+names(mycolors) <-levels(c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))
+colscale <- scale_colour_manual(name = "stage", values = mycolors)
+
+```
+
+```{r reassemble vuln scores and attach to stage 1 polygon sf, echo=FALSE}
+
+### to reassemble just vuln scores:
+spp_vuln_scores <- fread(here('_output/gap_stage_spp_vuln_from_traits_score.csv')) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_tx.csv'))) %>%
+  dplyr::select(-vuln_tx_id, -vuln_str_id) %>% 
+  dplyr::filter(gap == "yes")
+
+str_vuln_lookup_f <- here('_raw_data/stressor_vulnerability_lookup.csv')
+str_vuln_lookup_raw <- read_csv(str_vuln_lookup_f)
+str_vuln_lookup <- str_vuln_lookup_raw %>%
+  filter(!stressor %in% c('biomass_removal', 'bycatch', 'sst_rise'))
+
+str_cats <- colnames(str_am_join)[5:14]
+
+#For our hypothetical polygons, the overall probability the turtle may exist in said polygon is equal to 1 or 100% of the time.
+
+prob <- 1
+
+str_am_pivot_stg1 <- str_am_stg1_join %>%
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "impact_score",
+               names_to = "stressor") %>%
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "stressor")) %>%
+  left_join(y = spp_vuln_scores %>% filter(stage == "hatchling"),
+            by = c("vulnerability" = "stressor")) %>%
+  mutate(calc_score = impact_score * vuln * prob) %>%
+  dplyr::select(-c("vulnerability", "stressor_group", "impact_score", "vuln"))
+
+str_am_wgt_vuln_stg1 <- str_am_pivot_stg1 %>%
+  pivot_wider(names_from = "stressor", values_from = c("calc_score"))
+
+
+#next steps summarize each of the stressors by stage (group_by), min, med, avg, max, sd
+#calc final vulnerability using original vuln values. 
+
+vuln_str_am_mean_stg1 <- str_am_wgt_vuln_stg1 %>% 
+  group_by(stage) %>% 
+  summarise_at(str_cats, list(mean), na.rm = TRUE) %>% 
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "mean",
+               names_to = "stressor")
+
+new_str_am_stg1 <- ggplot(vuln_str_am_mean_stg1, aes(x = stressor, y = mean)) +
+  geom_point(aes(color = stage)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 10))
+
+ggsave(here('figs/weighted_stressors_stg1.png'), height = 6, width = 6, dpi = 300)
+
+knitr::include_graphics(here('figs/weighted_stressors_stg1.png'))
+
+#Replace old stressors with new weighted-stressor vuln scores
+
+spp_vuln_scores_weighted_stg1 <- spp_vuln_scores %>% 
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "vulnerability")) %>% 
+  left_join(y = vuln_str_am_mean_stg1,
+            by = c("stressor.y" = "stressor", "stage" = "stage")) %>% 
+  mutate(vuln_wt = ifelse(is.na(mean), vuln, mean)) %>% 
+  mutate(new_str = ifelse(is.na(stressor.y), stressor, stressor.y)) %>% 
+  dplyr::select(c("stage", "stressor", "stressor.y", "new_str","vuln","vuln_wt")) %>% 
+  pivot_longer(cols = c("vuln", "vuln_wt"),
+               values_to = "values",
+               names_to = "type")
+
+spp_vuln_scores_sum_stg1 <- spp_vuln_scores_weighted_stg1 %>% 
+  group_by(stage, type) %>% 
+  summarise(total = sum(values),
+            .groups = 'drop') %>% 
+  arrange(type, factor(stage, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))) %>% 
+  filter(!stage == "all")
+
+strs_to_keep_new <- c('biomass_removal',
+                  'bycatch',
+                  'nutrient',
+                  'fishing_benthic_dest',
+                  'benth_str',
+                  'direct_human',
+                  'light_pollution',
+                  'plastic_pollution_microplastic',
+                  'shipping_all_unweighted',
+                  'sst_extremes',
+                  'ocean_acidification',
+                  'sea_level_rise',
+                  'sst_rise',
+                  'uv_radiation')
+plot_newvuln <- spp_vuln_scores_weighted_stg1 %>% 
+  filter(new_str %in% strs_to_keep_new) %>%
+  distinct() %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+stage <- plot_newvuln$stage %>% unique()
+                
+
+  t_newvuln <- plot_newvuln %>% 
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
+    #filter(stage == t)
+  mean_str_newvuln <- t_newvuln %>%
+    group_by(stage, new_str, type) %>%
+    summarize(values = mean(values), .groups = 'drop')
+  mean_tot_newvuln <- t_newvuln %>%
+    group_by(stage, type) %>%
+    summarize(values = mean(values))
+  
+  
+vuln_plot <- ggplot(t_newvuln, 
+                      aes(x = new_str, y = values, colour = type)) +
+    theme_ohara(base_size = 12) +
+    geom_hline(data = mean_tot_newvuln, aes(yintercept = values, colour = type)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(aes(color = type), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_newvuln,
+               aes(color = type),
+               shape = 21, size = 3,
+               alpha = 1) +
+    ylim(0, 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+          strip.background = element_rect(fill = 'grey90')) +
+    labs(title = paste0('Vulnerability'))+
+    facet_wrap(~stage)
+  
+  plotfile <- sprintf('figs/wt_vuln_plot_from_str_stg1.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+  # cat(sprintf('![](%s)\n', plotfile))
+  
+
+vuln_plot
+
+
+
+
+```
+
+```{r reassemble vuln scores and attach to stage 2 polygon sf, echo=FALSE}
+
+### to reassemble just vuln scores:
+spp_vuln_scores <- fread(here('_output/gap_stage_spp_vuln_from_traits_score.csv')) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
+  left_join(fread(here('_output/gap_stage_spp_vuln_from_traits_tx.csv'))) %>%
+  dplyr::select(-vuln_tx_id, -vuln_str_id) %>% 
+  dplyr::filter(gap == "yes")
+
+str_vuln_lookup_f <- here('_raw_data/stressor_vulnerability_lookup.csv')
+str_vuln_lookup_raw <- read_csv(str_vuln_lookup_f)
+str_vuln_lookup <- str_vuln_lookup_raw %>%
+  filter(!stressor %in% c('biomass_removal', 'bycatch', 'sst_rise'))
+
+str_cats <- colnames(str_am_join)[5:14]
+
+#For our hypothetical polygons, the overall probability the turtle may exist in said polygon is equal to 1 or 100% of the time.
+
+prob <- 1
+
+str_am_pivot_stg2 <- str_am_stg2_join %>%
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "impact_score",
+               names_to = "stressor") %>%
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "stressor")) %>%
+  left_join(y = spp_vuln_scores %>% filter(stage == "gyre"),
+            by = c("vulnerability" = "stressor")) %>%
+  mutate(calc_score = impact_score * vuln * prob) %>%
+  dplyr::select(-c("vulnerability", "stressor_group", "impact_score", "vuln"))
+
+str_am_wgt_vuln_stg2 <- str_am_pivot_stg2 %>%
+  pivot_wider(names_from = "stressor", values_from = c("calc_score"))
+
+
+#next steps summarize each of the stressors by stage (group_by), min, med, avg, max, sd
+#calc final vulnerability using original vuln values. 
+
+vuln_str_am_mean_stg2 <- str_am_wgt_vuln_stg2 %>% 
+  group_by(stage) %>% 
+  summarise_at(str_cats, list(mean), na.rm = TRUE) %>% 
+  pivot_longer(cols = any_of(str_cats),
+               values_to = "mean",
+               names_to = "stressor")
+
+new_str_am_stg2 <- ggplot(vuln_str_am_mean_stg2, aes(x = stressor, y = mean)) +
+  geom_point(aes(color = stage)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 10))
+
+ggsave(here('figs/weighted_stressors_stg2.png'), height = 6, width = 6, dpi = 300)
+
+knitr::include_graphics(here('figs/weighted_stressors_stg2.png'))
+
+#Replace old stressors with new weighted-stressor vuln scores
+
+spp_vuln_scores_weighted_stg2 <- spp_vuln_scores %>% 
+  left_join(y = str_vuln_lookup,
+            by = c("stressor" = "vulnerability")) %>% 
+  left_join(y = vuln_str_am_mean_stg2,
+            by = c("stressor.y" = "stressor", "stage" = "stage")) %>% 
+  mutate(vuln_wt = ifelse(is.na(mean), vuln, mean)) %>% 
+  mutate(new_str = ifelse(is.na(stressor.y), stressor, stressor.y)) %>% 
+  dplyr::select(c("stage", "stressor", "stressor.y", "new_str","vuln","vuln_wt")) %>% 
+  pivot_longer(cols = c("vuln", "vuln_wt"),
+               values_to = "values",
+               names_to = "type")
+
+spp_vuln_scores_sum_stg2 <- spp_vuln_scores_weighted_stg2 %>% 
+  group_by(stage, type) %>% 
+  summarise(total = sum(values),
+            .groups = 'drop') %>% 
+  arrange(type, factor(stage, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))) %>% 
+  filter(!stage == "all")
+
+strs_to_keep_new <- c('biomass_removal',
+                  'bycatch',
+                  'nutrient',
+                  'fishing_benthic_dest',
+                  'benth_str',
+                  'direct_human',
+                  'light_pollution',
+                  'plastic_pollution_microplastic',
+                  'shipping_all_unweighted',
+                  'sst_extremes',
+                  'ocean_acidification',
+                  'sea_level_rise',
+                  'sst_rise',
+                  'uv_radiation')
+plot_newvuln <- spp_vuln_scores_weighted_stg2 %>% 
+  filter(new_str %in% strs_to_keep_new) %>%
+  distinct() %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+stage <- plot_newvuln$stage %>% unique()
+                
+
+  t_newvuln <- plot_newvuln %>% 
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
+    #filter(stage == t)
+  mean_str_newvuln <- t_newvuln %>%
+    group_by(stage, new_str, type) %>%
+    summarize(values = mean(values), .groups = 'drop')
+  mean_tot_newvuln <- t_newvuln %>%
+    group_by(stage, type) %>%
+    summarize(values = mean(values))
+  
+  
+vuln_plot <- ggplot(t_newvuln, 
+                      aes(x = new_str, y = values, colour = type)) +
+    theme_ohara(base_size = 12) +
+    geom_hline(data = mean_tot_newvuln, aes(yintercept = values, colour = type)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(aes(color = type), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_newvuln,
+               aes(color = type),
+               shape = 21, size = 3,
+               alpha = 1) +
+    ylim(0, 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+          strip.background = element_rect(fill = 'grey90')) +
+    labs(title = paste0('Vulnerability'))+
+    facet_wrap(~stage)
+  
+  plotfile <- sprintf('figs/wt_vuln_plot_from_str_stg2.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+  # cat(sprintf('![](%s)\n', plotfile))
+  
+
+vuln_plot
+
+
+
+
+```
+
+```{r join all polygons to plot, echo=FALSE}
+#Weigh impact vulnerability to ages
+
+vuln_wgt_merge <- bind_rows("am" = spp_vuln_scores_am_weighted, 
+                          "hatchling" = spp_vuln_scores_weighted_stg1 %>%  filter(stage == "hatchling"), 
+                          "gyre" = spp_vuln_scores_weighted_stg2 %>% filter(stage == "gyre"), 
+                          .id = "groups") 
+
+
+stg1_age <- 0.5/80
+stg2_age <- 4.5/80
+stg3_age <- 15/80
+stg4_age <- 60/80
+
+vuln_wgt_merge_age <- vuln_wgt_merge %>%
+  mutate(age_wt_vuln = values * case_when(
+    stage == "hatchling" ~ stg1_age,
+    stage == "gyre" ~ stg2_age,
+    stage == "juvenile" ~ stg3_age,
+    stage == "adult" ~ stg4_age,
+    stage == "original" ~ 1
+  ))
+
+vuln_wgt_all <- vuln_wgt_merge_age %>%
+  filter(stage != 'all') %>% 
+  bind_rows(filter(vuln_wgt_merge_age %>% 
+                     filter(groups == 'am' & stage != 'all'), 
+                   stage != 'original')) %>% 
+  group_by(groups, stage, new_str, type) %>%
+  mutate(stage = replace(stage, duplicated(stage), 'all')) %>% 
+  ungroup() 
+
+
+
+
+
+
+#Recalculate "all" for new weighted vulns
+
+
+plot_newvuln <- vuln_wgt_all %>% 
+  filter(type == 'vuln_wt') %>% 
+  filter(new_str %in% strs_to_keep_new) %>%
+  distinct() %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+stage <- plot_newvuln$stage %>% unique()
+                
+
+  t_newvuln <- plot_newvuln %>% 
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
+    #filter(stage == t)
+  mean_str_newvuln <- t_newvuln %>%
+    group_by(stage, new_str, groups) %>%
+    summarize(values = mean(values), .groups = 'drop')
+  mean_tot_newvuln <- t_newvuln %>%
+    group_by(stage, groups) %>%
+    summarize(values = mean(values))
+  
+  
+vuln_plot <- ggplot(t_newvuln, 
+                      aes(x = new_str, y = values, colour = groups)) +
+    theme_ohara(base_size = 12) +
+    geom_hline(data = mean_tot_newvuln, aes(yintercept = values, colour = groups)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(aes(color = groups), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_newvuln,
+               aes(color = groups),
+               shape = 21, size = 3,
+               alpha = 1) +
+    ylim(0, 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+          strip.background = element_rect(fill = 'grey90')) +
+    labs(title = paste0('Age-Weighted Vulnerability across all distributions'))+
+    facet_wrap(~stage)
+  
+  plotfile <- sprintf('figs/wt_vuln_plot_from_str_alldists.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+  # cat(sprintf('![](%s)\n', plotfile))
+  
+
+vuln_plot
+
 
 ```

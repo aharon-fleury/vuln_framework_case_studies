@@ -686,7 +686,7 @@ write_csv(spp_vuln_resc_all_scores,
 spp_vuln_scores_all <- fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_all_scores.csv')) %>%
   left_join(fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_str.csv'))) %>%
   left_join(fread(here_anx('External Data/3_vuln_score_traits/gap_stage_spp_vuln_from_traits_stage.csv'))) %>%
-  select(-vuln_tx_id, -vuln_str_id)
+  dplyr::select(-vuln_tx_id, -vuln_str_id)
 # cp <- spp_vuln_scores_all %>% filter(species == 'caulophryne polynema')
 # cs <- spp_vuln_scores_all %>% filter(species == 'centrophryne spinulosa')
 
@@ -709,14 +709,15 @@ strs_to_keep <- c('biomass_removal',
                   'slr',
                   'sst_rise',
                   'uv')
-plot_df <- spp_vuln_rescale %>% 
-  filter(stressor %in% strs_to_keep) %>%
+plot_df <- spp_vuln_scores_all %>% 
+  # filter(stressor %in% strs_to_keep) %>%
+  filter(gap == 'yes') %>% 
   distinct() %>%
   mutate(across(where(is.numeric), ~round(., 4)))
 
 stage <- plot_df$stage %>% unique()
                 
-for(t in stage) {# t <- taxa[6]
+
   t_vuln <- plot_df %>% 
     mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
     #filter(stage == t)
@@ -729,30 +730,88 @@ for(t in stage) {# t <- taxa[6]
   
   
   vuln_plot <- ggplot(t_vuln, 
-                      aes(x = stressor, y = vuln, colour = gap)) +
+                      aes(x = stressor, y = vuln, colour = stage)) +
     theme_ohara(base_size = 12) +
-    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln, colour = gap)) +
+    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln, colour = stage)) +
     # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
-    geom_point(aes(color = gap), size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(aes(color = stage), size = 1, alpha = .6, width = .2, height = .02) +
     geom_point(data = mean_str_vuln,
-               aes(color = gap),
+               aes(color = stage),
                shape = 21, size = 3,
                alpha = 1) +
     ylim(0, 1) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
           strip.background = element_rect(fill = 'grey90')) +
-    labs(title = paste0('Vulnerability'))+
+    labs(title = paste0('Vulnerability using gap-filled traits'))+
     facet_wrap(~stage)
   
-  plotfile <- sprintf('figs/gap_stage_vuln_plot_from_traits_all.png')
+  plotfile <- sprintf('figs/yes_stage_vuln_plot_from_traits_all.png')
+  ggsave(plot = vuln_plot, filename = plotfile, 
+         width = 8, height = 8, dpi = 300)
+  # cat(sprintf('![](%s)\n', plotfile))
+  
+
+
+vuln_plot
+
+```
+
+#### Plots renamed to Butt et al. and only looking at gap with yes.
+``` {r, results = 'asis'}
+strs_to_keep <- c('biomass_removal',
+                  'bycatch',
+                  'eutrophication_nutrient_pollution',
+                  'habitat_loss_degradation',
+                  'light_pollution',
+                  'plastic_pollution_microplastic',
+                  'wildlife_strike',
+                  'marine_heat_waves',
+                  'oa',
+                  'slr',
+                  'sst_rise',
+                  'uv')
+plot_df <- spp_vuln_rescale %>% 
+  filter(stressor %in% strs_to_keep) %>%
+  distinct() %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+stage <- plot_df$stage %>% unique()
+                
+for(t in stage) {# t <- taxa[6]
+  t_vuln <- plot_df %>% 
+    mutate(stage = ifelse(stage == 'original', 'Butt et al. 2022', stage)) %>%
+    mutate(across(stage, factor, levels = c('Butt et al. 2022', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))) %>%
+    filter(gap == 'yes')
+  mean_str_vuln <- t_vuln %>%
+    group_by(gap, stage, stressor) %>%
+    summarize(vuln = mean(vuln), .groups = 'drop')
+  mean_tot_vuln <- t_vuln %>%
+    group_by(gap, stage) %>%
+    summarize(vuln = mean(vuln))
+  
+  
+  vuln_plot <- ggplot(t_vuln, 
+                      aes(x = stressor, y = vuln)) +
+    theme_ohara(base_size = 12) +
+    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
+    geom_point(size = 1, alpha = .6, width = .2, height = .02) +
+    geom_point(data = mean_str_vuln,
+               shape = 21, size = 3,
+               alpha = 1) +
+    ylim(0, 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+          strip.background = element_rect(fill = 'grey90')) +
+    labs(title = paste0('Vulnerability of Chelonia mydas'))+
+    facet_wrap(~stage)
+  
+  plotfile <- sprintf('figs/stage_vuln_plot_from_traits_all.png')
   ggsave(plot = vuln_plot, filename = plotfile, 
          width = 8, height = 8, dpi = 300)
   # cat(sprintf('![](%s)\n', plotfile))
   } 
 
 vuln_plot
-
-```
 
 ### Vulnerability by stressor across all taxa
 ```{r}
