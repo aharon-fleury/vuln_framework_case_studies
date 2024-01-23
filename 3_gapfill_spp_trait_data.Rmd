@@ -124,9 +124,9 @@ spp_zone_df <- spp_depth_df %>%
 
 ```{r length}
 spp_length_df <- read_csv(here('_data/fb_traits/trait_length_cm.csv')) %>%
-  mutate(trait_value = case_when((length*10) < 5     ~ '0.5mm-49mm',
-                                 (length*10) < 1000  ~ '50mm-999mm',
-                                 (length*10) >= 1000 ~ '>1000mm',
+  mutate(trait_value = case_when((length) < 5     ~ '0.5mm-49mm',
+                                 (length) < 100  ~ '50mm-999mm',
+                                 (length) >= 100 ~ '>1000mm',
                                  TRUE      ~ 'unknown')) %>%
   mutate(category = 'biophysical_traits',
          trait = 'adult_body_mass_body_size')

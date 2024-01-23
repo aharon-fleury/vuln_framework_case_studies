@@ -697,7 +697,7 @@ spp_vuln_scores_all <- fread(here_anx('External Data/3_vuln_score_traits/gap_sta
 ### Vulnerability per stressor by spp gp
 
 ``` {r, results = 'asis'}
-strs_to_keep <- c('biomass_removal',
+strs_to_keep <- c(#'biomass_removal',
                   'bycatch',
                   'eutrophication_nutrient_pollution',
                   'habitat_loss_degradation',
@@ -707,7 +707,7 @@ strs_to_keep <- c('biomass_removal',
                   'marine_heat_waves',
                   'oa',
                   'slr',
-                  'sst_rise',
+                  #'sst_rise',
                   'uv')
 plot_df <- spp_vuln_scores_all %>% 
   # filter(stressor %in% strs_to_keep) %>%
@@ -719,33 +719,55 @@ stage <- plot_df$stage %>% unique()
                 
 
   t_vuln <- plot_df %>% 
-    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling')))#%>%
-    #filter(stage == t)
+    mutate(across(stage, factor, levels = c('original', 'all', 'adult', 'juvenile', 'gyre', 'hatchling'))) %>% 
+    filter(stage != 'all') %>% 
+    mutate(stressor = recode(stressor, bycatch = "Bycatch", 
+                             eutrophication_nutrient_pollution = "Nutrient pollution",
+                             habitat_loss_degradation = "Habitat degradation",
+                             light_pollution = "Light pollution",
+                             marine_heat_waves = "Marine heat waves",
+                             oa = "Ocean acidification",
+                             plastic_pollution_microplastic = "Microplastic pollution",
+                             slr = "Sea level rise",
+                             wildlife_strike = "Wildlife Strike",
+                             uv = "UV radiation"))  %>%   
+  arrange(stage, desc(vuln)) %>% 
+  mutate(stressor = factor(stressor, levels = unique(stressor)))
+
+
+  
   mean_str_vuln <- t_vuln %>%
-    group_by(gap, stage, stressor) %>%
+    group_by(stage, stressor) %>%
     summarize(vuln = mean(vuln), .groups = 'drop')
   mean_tot_vuln <- t_vuln %>%
     group_by(gap, stage) %>%
     summarize(vuln = mean(vuln))
+  geom_tot_vuln <- t_vuln %>% 
+    group_by(stage) %>% 
+    summarize(geom = exp(mean(log(geom))))
+  
+
+t_vuln <- t_vuln %>% 
+  mutate(geom = 1- vuln)
   
   
-  vuln_plot <- ggplot(t_vuln, 
-                      aes(x = stressor, y = vuln, colour = stage)) +
-    theme_ohara(base_size = 12) +
-    geom_hline(data = mean_tot_vuln, aes(yintercept = vuln, colour = stage)) +
-    # geom_hline(data = mean_tot_vuln, aes(yintercept = vuln)) +
-    geom_point(aes(color = stage), size = 1, alpha = .6, width = .2, height = .02) +
-    geom_point(data = mean_str_vuln,
-               aes(color = stage),
-               shape = 21, size = 3,
-               alpha = 1) +
-    ylim(0, 1) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
-          strip.background = element_rect(fill = 'grey90')) +
-    labs(title = paste0('Vulnerability using gap-filled traits'))+
-    facet_wrap(~stage)
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#D55E00", "#CC79A7")
+
+vuln_plot <- ggplot(t_vuln,
+         aes(x = stressor, y = vuln, group = stage)) +
+  geom_point(size = 2, aes(shape = stage)) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1),
+          panel.grid.minor = element_blank()) +
+  scale_y_continuous(name = "Vulnerability") +
+  scale_x_discrete(name = "Stressor", labels = c("Biomass removal", "Bycatch", "Sea surface temperature rise", "Macroplastic entanglement", "Nutrient pollution", "Habitat degradation", "Invasive species", "Light pollution", "Organic pollution", "Wildlife strike", "Inorganic pollution", "Sedimentation", "Storm disturbance", "Air temperature", "Marine heat waves", "Microplastic pollution", "Poisons and toxins", "Sea level rise", "Noise pollution", "Ocean acidification", "Oceanographic", "Salinity", "UV radiation")) +
+  scale_shape_manual(name = 'Stage', labels = c('Butt et al.', 'Adult', 'Juvenile', 'Gyre', 'Hatchling'), values = c(15, 0, 1, 2, 6)) +
+  scale_colour_manual(name = 'Stage', labels = c('Butt et al.', 'Adult', 'Juvenile', 'Gyre', 'Hatchling'), values=cbPalette) +
+  geom_hline(data = mean_tot_vuln, aes(yintercept = vuln, color = factor(stage)), size = 0.5) 
+  # scale_linetype_manual(name = 'Stage', labels = c('Butt et al', 'Adult', 'Juvenile', 'Gyre', 'Hatchling'), values )
+  # geom_hline(data = geom_tot_vuln, aes(yintercept = geom, color = factor(stage)))
   
-  plotfile <- sprintf('figs/yes_stage_vuln_plot_from_traits_all.png')
+  plotfile <- sprintf('figs/pub_fig2.tiff')
   ggsave(plot = vuln_plot, filename = plotfile, 
          width = 8, height = 8, dpi = 300)
   # cat(sprintf('![](%s)\n', plotfile))
@@ -786,7 +808,7 @@ for(t in stage) {# t <- taxa[6]
     group_by(gap, stage, stressor) %>%
     summarize(vuln = mean(vuln), .groups = 'drop')
   mean_tot_vuln <- t_vuln %>%
-    group_by(gap, stage) %>%
+    group_by(stage) %>%
     summarize(vuln = mean(vuln))
   
   
